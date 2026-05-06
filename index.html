@@ -1079,7 +1079,10 @@
     .ap-title {
       font-size: 20px; font-weight: 400;
       color: var(--text-primary);
-      flex: 1;
+      flex: 1; min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     /* ── Actions row (sort / filter / search) ── */
     .ap-actions {
@@ -6118,7 +6121,7 @@
 
     // Switch to chat view
     panel.classList.add('ap-chat-open');
-    apTitleEl.textContent = msg.length > 46 ? msg.slice(0, 43) + '…' : msg;
+    apTitleEl.textContent = msg;
     apChatView.innerHTML = '';
 
     // Clear header input
