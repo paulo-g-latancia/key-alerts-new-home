@@ -1740,6 +1740,8 @@
     /* Mini card: reuse ap-alert-row but non-interactive */
     .ap-dv-header-card { flex: 1 !important; cursor: default !important; }
     .ap-dv-header-card:hover { background: white !important; }
+    /* Hide close button when alert card is in the header */
+    .alerts-panel.ap-detail-open #ap-close-btn { display: none; }
     /* Show footer in detail mode */
     .alerts-panel.ap-detail-open .ap-chat-foot-bar {
       display: flex; align-items: flex-end; gap: 16px;
@@ -5666,28 +5668,6 @@
           ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
           : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>') +
       '</div>' +
-      '<div class="ap-dv-meta">' +
-        '<span class="ap-dv-received">Received ' + fmtTimeAgo(a.received) + ' ago</span>' +
-        '<button class="ap-dv-mark-unread" data-markunread-id="' + a.id + '">Mark as unread</button>' +
-        '<button class="ap-dv-dismiss" data-dismiss-id="' + a.id + '">Dismiss alert</button>' +
-      '</div>';
-
-    apDetail.querySelector('.ap-dv-dismiss').addEventListener('click', function (e) {
-      e.stopPropagation();
-      var did = parseInt(this.getAttribute('data-dismiss-id'), 10);
-      closeDetail();
-      dismissAlert(did);
-    });
-    apDetail.querySelector('.ap-dv-mark-unread').addEventListener('click', function (e) {
-      e.stopPropagation();
-      var uid = parseInt(this.getAttribute('data-markunread-id'), 10);
-      var al = ALL_ALERTS.filter(function (x) { return x.id === uid; })[0];
-      if (al) { al.status = 'unread'; }
-      closeDetail();
-      renderAlerts(currentPage);
-      updateBadge();
-      updateTablePills([uid]);
-    });
     apDetail.querySelectorAll('.ap-dv-view-ctx').forEach(function (lnk) {
       lnk.addEventListener('click', function (e) { e.preventDefault(); });
     });
