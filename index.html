@@ -1586,6 +1586,7 @@
       background: var(--blue-700); cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: background 0.15s;
+      position: relative;
     }
     .ap-head-send-btn .mi { font-size: 20px; color: white; }
     .ap-head-send-btn:hover { background: var(--blue-500); }
@@ -1596,9 +1597,63 @@
       background: white; cursor: pointer; color: var(--blue-700);
       display: flex; align-items: center; justify-content: center;
       transition: background 0.15s;
+      position: relative;
     }
     .ap-head-history-btn .mi { font-size: 20px; color: var(--blue-700); }
     .ap-head-history-btn:hover { background: #e8f5e9; }
+    /* Tooltips for input-area buttons */
+    .ap-head-send-btn[data-tooltip]::after,
+    .ap-head-history-btn[data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(28,28,28,0.88); color: white;
+      padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; white-space: nowrap;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.15s ease; z-index: 300;
+    }
+    .ap-head-send-btn[data-tooltip]:hover::after,
+    .ap-head-history-btn[data-tooltip]:hover::after { opacity: 1; }
+    /* ── Chat history view ── */
+    .ap-history-view {
+      display: none; flex: 1; overflow-y: auto; min-height: 0;
+      flex-direction: column;
+    }
+    .alerts-panel.ap-history-open .ap-history-view { display: flex; }
+    .alerts-panel.ap-history-open .ap-content,
+    .alerts-panel.ap-history-open .ap-pagination,
+    .alerts-panel.ap-history-open .ap-actions,
+    .alerts-panel.ap-history-open .ap-header-input-area { display: none; }
+    .alerts-panel.ap-history-open .ap-header { padding-top: 8px; padding-bottom: 8px; gap: 0; }
+    .alerts-panel.ap-history-open #ap-dv-back-btn { display: flex; }
+    .ap-history-section-label {
+      padding: 12px 16px 6px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-sec);
+    }
+    .ap-history-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; cursor: pointer;
+      border-bottom: 1px solid var(--grey-200);
+      transition: background 0.1s;
+    }
+    .ap-history-item:hover { background: var(--grey-50); }
+    .ap-history-item-icon {
+      width: 32px; height: 32px; flex-shrink: 0;
+      border-radius: 50%; background: #e8f5e9;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ap-history-item-icon .mi { font-size: 16px; color: var(--blue-700); }
+    .ap-history-item-body { flex: 1; min-width: 0; }
+    .ap-history-item-title {
+      font-size: 14px; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-weight: 600;
+    }
+    .ap-history-item-time { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+    .ap-history-item-chevron { font-size: 18px; color: var(--text-sec); flex-shrink: 0; }
 
     .ap-pagination {
       display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -1628,8 +1683,9 @@
     .alerts-panel.ap-detail-open .ap-actions { display: none; }
     /* Back button: hidden in list view, shown in detail or chat view */
     #ap-dv-back-btn { display: none; }
-    .alerts-panel.ap-detail-open #ap-dv-back-btn,
-    .alerts-panel.ap-chat-open   #ap-dv-back-btn { display: flex; }
+    .alerts-panel.ap-detail-open  #ap-dv-back-btn,
+    .alerts-panel.ap-chat-open    #ap-dv-back-btn,
+    .alerts-panel.ap-history-open #ap-dv-back-btn { display: flex; }
 
     /* ── Chat view state ── */
     .ap-chat-view {
@@ -2378,10 +2434,10 @@
               <div class="ap-suggestions-item" data-suggestion="How did we finish yesterday vs. STLY?">How did we finish yesterday vs. STLY?</div>
             </div>
           </div>
-          <button class="ap-head-send-btn" id="ap-chat-send-btn" aria-label="Send">
+          <button class="ap-head-send-btn" id="ap-chat-send-btn" aria-label="Send" data-tooltip="Send">
             <span class="material-icons-round mi">send</span>
           </button>
-          <button class="ap-head-history-btn" id="ap-history-btn" aria-label="History" data-tooltip="History">
+          <button class="ap-head-history-btn" id="ap-history-btn" aria-label="Chat history" data-tooltip="Chat history">
             <span class="material-icons-round mi">history</span>
           </button>
         </div>
@@ -2571,6 +2627,9 @@
 
       <!-- Chat view -->
       <div class="ap-chat-view" id="ap-chat-view"></div>
+
+      <!-- Chat history view -->
+      <div class="ap-history-view" id="ap-history-view"></div>
 
       <!-- Chat footer (visible only in chat mode) -->
       <div class="ap-chat-foot-bar" id="ap-chat-foot-bar">
@@ -3007,6 +3066,8 @@
     e.stopPropagation();
     if (panel.classList.contains('ap-chat-open')) {
       closeApChat();
+    } else if (panel.classList.contains('ap-history-open')) {
+      closeApHistory();
     } else {
       closeDetail();
     }
@@ -6227,6 +6288,57 @@
   // Close suggestions on outside click
   document.addEventListener('click', function () {
     apSuggestionsMenu.classList.remove('open');
+  });
+
+  /* ── Chat History ─────────────────────────────────── */
+  var apHistoryView = document.getElementById('ap-history-view');
+
+  var CHAT_HISTORY = [
+    { title: 'Help me plan the next 7 days',                         time: '2d ago' },
+    { title: 'Which segments are pacing behind forecast?',            time: '3d ago' },
+    { title: 'What happens to my forecast if I increase BAR by 5%?', time: '5d ago' },
+    { title: 'How did we finish yesterday vs. STLY?',                 time: '1w ago' },
+  ];
+
+  function buildHistoryView() {
+    apHistoryView.innerHTML = '';
+    var label = document.createElement('div');
+    label.className = 'ap-history-section-label';
+    label.textContent = 'Recent conversations';
+    apHistoryView.appendChild(label);
+
+    CHAT_HISTORY.forEach(function (entry) {
+      var item = document.createElement('div');
+      item.className = 'ap-history-item';
+      item.innerHTML =
+        '<div class="ap-history-item-icon"><span class="material-icons-round mi">chat_bubble_outline</span></div>' +
+        '<div class="ap-history-item-body">' +
+          '<div class="ap-history-item-title">' + entry.title + '</div>' +
+          '<div class="ap-history-item-time">' + entry.time + '</div>' +
+        '</div>' +
+        '<span class="material-icons-round ap-history-item-chevron">chevron_right</span>';
+      item.addEventListener('click', function () {
+        enterApChatMode(entry.title);
+      });
+      apHistoryView.appendChild(item);
+    });
+  }
+
+  function enterApHistoryMode() {
+    buildHistoryView();
+    panel.classList.add('ap-history-open');
+    apTitleEl.textContent = 'Chat history';
+  }
+
+  function closeApHistory() {
+    panel.classList.remove('ap-history-open');
+    apTitleEl.textContent = 'AI Assistant';
+    apChatInput.focus({ preventScroll: true });
+  }
+
+  document.getElementById('ap-history-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    enterApHistoryMode();
   });
 
   /* ── Today's Priority → AI chat ─────────────────────── */
