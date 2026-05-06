@@ -2208,12 +2208,9 @@
       <button class="sp-btn" data-tooltip="Metrics Calendar">
         <span class="material-icons-round mi">calendar_today</span>
       </button>
-      <button class="sp-btn" id="alerts-btn" data-tooltip="Alerts">
-        <span class="material-icons-round mi">notifications</span>
-        <span class="sp-badge" id="alerts-badge">2</span>
-      </button>
       <button class="sp-btn" id="ai-btn" data-tooltip="AI Assistant">
         <span class="material-icons-round mi">auto_awesome</span>
+        <span class="sp-badge" id="alerts-badge">2</span>
       </button>
     </aside>
 
@@ -2228,7 +2225,7 @@
         <button class="ap-header-btn" id="ap-dv-back-btn" data-tooltip="Back" aria-label="Back">
           <span class="material-icons-round mi">chevron_left</span>
         </button>
-        <h2 class="ap-title">Alerts</h2>
+        <h2 class="ap-title">AI Assistant</h2>
         <button class="ap-header-btn" id="ap-sort-btn" data-tooltip="Sort" aria-label="Sort">
           <span class="material-icons-round mi">sort</span>
         </button>
@@ -2562,7 +2559,7 @@
 (function () {
   'use strict';
 
-  var alertsBtn      = document.getElementById('alerts-btn');
+  var alertsBtn      = document.getElementById('ai-btn');
   var panel          = document.getElementById('alerts-panel');
   var closeBtn       = document.getElementById('ap-close-btn');
 
@@ -5688,12 +5685,7 @@
     aiBtn.classList.remove('sp-active');
   }
 
-  /* ── Rail button ── */
-  aiBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (panelOpen) closePanel();          // close Alerts if open
-    aiPanelOpen ? closeAiPanel() : openAiPanel();
-  });
+  /* ── Rail button now handled by alertsBtn (merged into AI Assistant panel) ── */
 
   /* ── Close button ── */
   aiCloseBtn.addEventListener('click', function (e) {
