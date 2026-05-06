@@ -1631,12 +1631,47 @@
     /* ── Chat view state ── */
     .ap-chat-view {
       display: none; flex: 1; overflow-y: auto; min-height: 0;
-      flex-direction: column; gap: 12px; padding: 16px;
+      flex-direction: column; gap: 16px; padding: 16px;
     }
     .alerts-panel.ap-chat-open .ap-content,
     .alerts-panel.ap-chat-open .ap-pagination { display: none; }
     .alerts-panel.ap-chat-open .ap-chat-view { display: flex; }
     .alerts-panel.ap-chat-open .ap-actions { display: none; }
+    /* In chat mode: hide the header input area, compact the header padding */
+    .alerts-panel.ap-chat-open .ap-header-input-area { display: none; }
+    .alerts-panel.ap-chat-open .ap-header { padding-top: 8px; padding-bottom: 8px; gap: 0; }
+    /* Chat footer bar — visible only in chat mode */
+    .ap-chat-foot-bar {
+      display: none;
+      flex-shrink: 0;
+      padding: 12px 16px;
+      border-top: 1px solid var(--grey-300);
+      background: white;
+    }
+    .alerts-panel.ap-chat-open .ap-chat-foot-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+    }
+    .ap-chat-foot-input {
+      flex: 1; resize: none;
+      border: 1px solid var(--blue-700); border-radius: 4px;
+      padding: 6px 8px; font-family: 'Lato', sans-serif;
+      font-size: 14px; color: var(--text-primary);
+      line-height: 1.4; min-height: 36px; max-height: 160px;
+      outline: none; overflow-y: auto; background: white;
+    }
+    .ap-chat-foot-input::placeholder { color: #8A9096; }
+    .ap-chat-foot-input:focus { border-color: var(--blue-700); }
+    .ap-chat-foot-send {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border: 1px solid var(--blue-700); border-radius: 4px;
+      background: white; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .ap-chat-foot-send .mi { font-size: 20px; color: var(--blue-700); }
+    .ap-chat-foot-send:hover { background: #e8f5e9; }
 
 
     .ap-dv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
@@ -2533,6 +2568,14 @@
 
       <!-- Chat view -->
       <div class="ap-chat-view" id="ap-chat-view"></div>
+
+      <!-- Chat footer (visible only in chat mode) -->
+      <div class="ap-chat-foot-bar" id="ap-chat-foot-bar">
+        <textarea class="ap-chat-foot-input" id="ap-chat-foot-input" rows="1" placeholder="Ask anything"></textarea>
+        <button class="ap-chat-foot-send" id="ap-chat-foot-send-btn" aria-label="Send">
+          <span class="material-icons-round mi">send</span>
+        </button>
+      </div>
 
       <!-- Dismiss confirmation toast -->
       <div class="ap-toast" id="ap-toast" role="status" aria-live="polite">
@@ -6022,11 +6065,13 @@
   aiSendBtn.addEventListener('click', function (e) { e.stopPropagation(); });
 
   /* ── Alerts panel chat input ── */
-  var apChatInput   = document.getElementById('ap-chat-input');
-  var apChatSendBtn = document.getElementById('ap-chat-send-btn');
-  var apChatView    = document.getElementById('ap-chat-view');
-  var apTitleEl     = document.querySelector('.ap-title');
-  var apChatWrap    = document.getElementById('ap-chat-input-wrap');
+  var apChatInput       = document.getElementById('ap-chat-input');
+  var apChatSendBtn     = document.getElementById('ap-chat-send-btn');
+  var apChatView        = document.getElementById('ap-chat-view');
+  var apTitleEl         = document.querySelector('.ap-title');
+  var apChatWrap        = document.getElementById('ap-chat-input-wrap');
+  var apChatFootInput   = document.getElementById('ap-chat-foot-input');
+  var apChatFootSendBtn = document.getElementById('ap-chat-foot-send-btn');
 
   function apChatAutoResize() {
     apChatInput.style.height = 'auto';
@@ -6062,6 +6107,11 @@
     }, delay);
   }
 
+  function apChatFootAutoResize() {
+    apChatFootInput.style.height = 'auto';
+    apChatFootInput.style.height = Math.min(apChatFootInput.scrollHeight, 160) + 'px';
+  }
+
   function enterApChatMode(msg) {
     msg = msg.trim();
     if (!msg) return;
@@ -6071,6 +6121,11 @@
     apTitleEl.textContent = msg.length > 46 ? msg.slice(0, 43) + '…' : msg;
     apChatView.innerHTML = '';
 
+    // Clear header input
+    apChatInput.value = '';
+    apChatInput.style.height = 'auto';
+    apChatWrap.classList.remove('has-text');
+
     // User bubble
     var bubble = document.createElement('div');
     bubble.className = 'ai-bubble-user';
@@ -6078,6 +6133,9 @@
     apChatView.appendChild(bubble);
 
     apAppendResponse(apChatView, msg);
+
+    // Focus the chat footer input
+    setTimeout(function () { apChatFootInput.focus({ preventScroll: true }); }, 50);
   }
 
   function closeApChat() {
@@ -6087,27 +6145,31 @@
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
     apChatWrap.classList.remove('has-text');
+    apChatFootInput.value = '';
+    apChatFootInput.style.height = 'auto';
     document.getElementById('ap-suggestions-menu').classList.remove('open');
     apChatInput.focus({ preventScroll: true });
   }
 
+  // Header input submits — only starts a new chat (can't be in chat mode when header input is visible)
   function apChatSubmit() {
     var msg = apChatInput.value.trim();
     if (!msg) return;
-    apChatInput.value = '';
-    apChatInput.style.height = 'auto';
+    enterApChatMode(msg);
+  }
 
-    if (panel.classList.contains('ap-chat-open')) {
-      // Continue existing thread
-      var bubble = document.createElement('div');
-      bubble.className = 'ai-bubble-user';
-      bubble.textContent = msg;
-      apChatView.appendChild(bubble);
-      apChatView.scrollTop = apChatView.scrollHeight;
-      apAppendResponse(apChatView, msg);
-    } else {
-      enterApChatMode(msg);
-    }
+  // Footer input — continues an existing chat thread
+  function apChatFootSubmit() {
+    var msg = apChatFootInput.value.trim();
+    if (!msg) return;
+    apChatFootInput.value = '';
+    apChatFootInput.style.height = 'auto';
+    var bubble = document.createElement('div');
+    bubble.className = 'ai-bubble-user';
+    bubble.textContent = msg;
+    apChatView.appendChild(bubble);
+    apChatView.scrollTop = apChatView.scrollHeight;
+    apAppendResponse(apChatView, msg);
   }
 
   apChatInput.addEventListener('input', function () {
@@ -6125,6 +6187,20 @@
   apChatSendBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     apChatSubmit();
+  });
+
+  apChatFootInput.addEventListener('input', apChatFootAutoResize);
+
+  apChatFootInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      apChatFootSubmit();
+    }
+  });
+
+  apChatFootSendBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    apChatFootSubmit();
   });
 
   /* ── Suggestions dropdown ─────────────────────────── */
