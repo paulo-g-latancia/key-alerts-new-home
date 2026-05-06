@@ -1400,7 +1400,8 @@
     .ap-tier-3 { border-left-color: #E68989; }
     .ap-tier-4 { border-left-color: #DD5F5F; }
     .ap-tier-5 { border-left-color: #D33030; }
-    .ap-alert-row.ap-unread {
+    .ap-alert-row.ap-unread,
+    .ap-alert-row.ap-normal {
       border-top-color: #AEB4BA;
       border-right-color: #AEB4BA;
       border-bottom-color: #AEB4BA;
@@ -1409,8 +1410,14 @@
     .ap-alert-row.ap-unread .ap-alert-day,
     .ap-alert-row.ap-unread .ap-alert-time,
     .ap-alert-row.ap-unread .ap-alert-type,
-    .ap-alert-row.ap-unread .ap-alert-title { color: var(--text-primary); }
-    .ap-alert-row.ap-unread .ap-alert-title { font-weight: 700; }
+    .ap-alert-row.ap-unread .ap-alert-title,
+    .ap-alert-row.ap-normal .ap-alert-dow,
+    .ap-alert-row.ap-normal .ap-alert-day,
+    .ap-alert-row.ap-normal .ap-alert-time,
+    .ap-alert-row.ap-normal .ap-alert-type,
+    .ap-alert-row.ap-normal .ap-alert-title { color: var(--text-primary); }
+    .ap-alert-row.ap-unread .ap-alert-title,
+    .ap-alert-row.ap-normal .ap-alert-title { font-weight: 700; }
     .ap-alert-row.ap-read .ap-alert-dow,
     .ap-alert-row.ap-read .ap-alert-day,
     .ap-alert-row.ap-read .ap-alert-time,
@@ -1476,18 +1483,18 @@
       font-size: 11px; line-height: 1.4;
       white-space: nowrap; flex-shrink: 0;
     }
-    .ap-unread .ap-hotel-tag { background: #DDE1E2; color: var(--text-primary); }
-    .ap-read .ap-hotel-tag,
-    .ap-normal .ap-hotel-tag { background: #EAEEEF; color: #B0BAC0; }
+    .ap-unread .ap-hotel-tag,
+    .ap-normal .ap-hotel-tag { background: #DDE1E2; color: var(--text-primary); }
+    .ap-read .ap-hotel-tag { background: #EAEEEF; color: #B0BAC0; }
     .ap-region-tag {
       display: inline-flex; align-items: center;
       padding: 2px 6px; border-radius: 8px;
       font-size: 11px; line-height: 1.4;
       white-space: nowrap; flex-shrink: 0;
     }
-    .ap-unread .ap-region-tag { background: #C8D8E8; color: #1A4A6B; }
-    .ap-read .ap-region-tag,
-    .ap-normal .ap-region-tag { background: #D8E4EE; color: #5A7A96; }
+    .ap-unread .ap-region-tag,
+    .ap-normal .ap-region-tag { background: #C8D8E8; color: #1A4A6B; }
+    .ap-read .ap-region-tag { background: #D8E4EE; color: #5A7A96; }
     /* Tags inside detail view header */
     .ap-dv-tags-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
     .ap-dv-tags-row .ap-hotel-tag { background: #DDE1E2; color: var(--text-primary); margin-bottom: 0; }
