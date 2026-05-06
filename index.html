@@ -1720,15 +1720,30 @@
     .ap-page-btn .mi { font-size: 18px; }
 
     /* ── Detail view ─────────────────────────────── */
+    /* Detail view: chat-like scrollable content */
     .ap-detail {
       display: none; flex: 1; overflow-y: auto; min-height: 0;
-      padding: 16px;
+      flex-direction: column; gap: 16px; padding: 16px;
     }
     .alerts-panel.ap-detail-open .ap-priority-card,
     .alerts-panel.ap-detail-open .ap-content,
     .alerts-panel.ap-detail-open .ap-pagination { display: none; }
-    .alerts-panel.ap-detail-open .ap-detail  { display: block; }
+    .alerts-panel.ap-detail-open .ap-detail  { display: flex; }
     .alerts-panel.ap-detail-open .ap-actions { display: none; }
+    /* Compact header + hide green input area in detail mode */
+    .alerts-panel.ap-detail-open .ap-header { padding-top: 8px; padding-bottom: 8px; gap: 0; }
+    .alerts-panel.ap-detail-open .ap-header-input-area { display: none; }
+    /* Swap title text for mini alert card */
+    .alerts-panel.ap-detail-open .ap-title { display: none; }
+    #ap-dv-card-header { display: none; flex: 1; min-width: 0; }
+    .alerts-panel.ap-detail-open #ap-dv-card-header { display: flex; }
+    /* Mini card: reuse ap-alert-row but non-interactive */
+    .ap-dv-header-card { flex: 1 !important; cursor: default !important; }
+    .ap-dv-header-card:hover { background: white !important; }
+    /* Show footer in detail mode */
+    .alerts-panel.ap-detail-open .ap-chat-foot-bar {
+      display: flex; align-items: flex-end; gap: 16px;
+    }
     /* Back button: hidden in list view, shown in detail or chat view */
     #ap-dv-back-btn { display: none; }
     .alerts-panel.ap-detail-open  #ap-dv-back-btn,
@@ -1783,38 +1798,20 @@
 
     .ap-dv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 
-    /* Detail header */
-    .ap-dv-header {
-      display: flex; flex-direction: row;
-      border: 1px solid var(--grey-300);
-      border-radius: 4px; overflow: hidden;
+    /* Detail secondary actions row (dismiss / mark unread) */
+    .ap-dv-meta {
+      display: flex; align-items: center; gap: 16px;
+      padding-top: 4px;
     }
-    .ap-dv-tier-bar {
-      width: 8px; flex-shrink: 0; align-self: stretch;
+    .ap-dv-received { font-size: 12px; color: var(--text-sec); flex: 1; }
+    .ap-dv-dismiss, .ap-dv-mark-unread {
+      font-size: 12px; color: var(--text-sec); background: none;
+      border: none; cursor: pointer; padding: 0;
+      font-family: 'Lato', sans-serif;
+      text-decoration: underline; text-underline-offset: 2px;
     }
-    .ap-dv-header-content {
-      flex: 1; min-width: 0;
-      display: flex; flex-direction: column; gap: 8px;
-      padding: 8px;
-    }
-    .ap-dv-title-block {
-      display: flex; flex-direction: column; gap: 2px;
-    }
-    .ap-dv-date     { font-size: 16px; color: var(--text-primary); line-height: 1.2; }
-    .ap-dv-category { font-size: 12px; color: var(--text-sec); font-style: italic; line-height: 1.2; }
-    .ap-dv-title    { font-size: 16px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
-    .ap-dv-meta     { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-    .ap-dv-received { flex: 1; color: var(--text-sec); }
-    .ap-dv-dismiss  {
-      color: #C0341B; cursor: pointer; text-decoration: none;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .ap-dv-dismiss:hover { text-decoration: underline; }
-    .ap-dv-mark-unread {
-      color: #1b4dc0; cursor: pointer; text-decoration: none;
-      white-space: nowrap; flex-shrink: 0;
-    }
-    .ap-dv-mark-unread:hover { text-decoration: underline; }
+    .ap-dv-dismiss:hover { color: #C0341B; }
+    .ap-dv-mark-unread:hover { color: var(--blue-700); }
 
     /* Tier bar colors for the detail header */
     .ap-tier-1 .ap-dv-tier-bar { background: #F9E2E2; }
@@ -2464,6 +2461,7 @@
             <span class="material-icons-round mi">chevron_left</span>
           </button>
           <h2 class="ap-title">AI Assistant</h2>
+          <div id="ap-dv-card-header"></div>
           <button class="ap-header-btn" id="ap-close-btn" aria-label="Close">
             <span class="material-icons-round mi">close</span>
           </button>
@@ -5602,14 +5600,35 @@
   // ── Detail view ─────────────────────────────────────────────────────────────
   var DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
+  var apDvCardHeader = document.getElementById('ap-dv-card-header');
+
   function renderDetail(id) {
     var a = ALL_ALERTS.filter(function (x) { return x.id === id; })[0];
     if (!a) return;
     var showRegion = (currentProperty === 'cluster-11-50' || currentProperty === 'cluster-51plus');
-    var fullDate = DAYS_LONG[a.date.getDay()] + ', ' +
-                   MONTHS_LONG[a.date.getMonth()] + ' ' +
-                   a.date.getDate() + ', ' + a.date.getFullYear();
 
+    // ── Mini alert card in the panel header ──────────────────────────
+    var dow = DAYS[a.date.getDay()];
+    var day = MONTHS_SHORT[a.date.getMonth()] + ' ' + a.date.getDate();
+    var statusClass = a.status === 'read' ? 'ap-read' : 'ap-unread';
+    apDvCardHeader.innerHTML =
+      '<div class="ap-alert-row ap-dv-header-card ' + statusClass + ' ap-tier-' + a.tier + '">' +
+        '<div class="ap-alert-date">' +
+          '<span class="ap-alert-dow">' + dow + '</span>' +
+          '<span class="ap-alert-day">' + day + '</span>' +
+          '<span class="ap-alert-time">' + fmtTimeAgo(a.received) + ' ago</span>' +
+        '</div>' +
+        '<div class="ap-alert-info">' +
+          '<div class="ap-alert-tags-row">' +
+            '<div class="ap-hotel-tag">' + a.hotel + '</div>' +
+            (showRegion ? '<div class="ap-region-tag">' + a.region + '</div>' : '') +
+            '<div class="ap-alert-type">' + a.category + '</div>' +
+          '</div>' +
+          '<div class="ap-alert-title">' + a.title + '</div>' +
+        '</div>' +
+      '</div>';
+
+    // ── Scrollable chat-like content ─────────────────────────────────
     var bulletsHtml = a.description.split(' | ').map(function (b) {
       return '<div class="ap-dv-bullet-item">' +
                '<div class="ap-dv-bullet">' + b.trim() + '</div>' +
@@ -5626,7 +5645,7 @@
         '<span class="ap-action-text">' + act + '</span>' +
       '</li>';
     }).join('');
-    var allApplied  = allActions.length > 0 && allActions.every(function (act) { return applied.indexOf(act) !== -1; });
+    var allApplied = allActions.length > 0 && allActions.every(function (act) { return applied.indexOf(act) !== -1; });
 
     var projHtml = a.projections.map(function (p) {
       var vc = p.value.charAt(0) === '+' ? ' pos' : (p.value.charAt(0) === '-' ? ' neg' : '');
@@ -5638,49 +5657,32 @@
     }).join('');
 
     apDetail.innerHTML =
-      '<div class="ap-dv-main">' +
-        '<div class="ap-dv-header ap-tier-' + a.tier + '">' +
-          '<div class="ap-dv-tier-bar"></div>' +
-          '<div class="ap-dv-header-content">' +
-            '<div class="ap-dv-title-block">' +
-              '<div class="ap-dv-tags-row">' +
-                '<span class="ap-hotel-tag">' + a.hotel + '</span>' +
-                (showRegion ? '<span class="ap-region-tag">' + a.region + '</span>' : '') +
-              '</div>' +
-              '<div class="ap-dv-date">' + fullDate + '</div>' +
-              '<div class="ap-dv-category">' + a.category + '</div>' +
-              '<div class="ap-dv-title">' + a.title + '</div>' +
-            '</div>' +
-            '<div class="ap-dv-meta">' +
-              '<span class="ap-dv-received">Received ' + fmtTimeAgo(a.received) + ' ago</span>' +
-              '<a class="ap-dv-mark-unread" href="#" data-markunread-id="' + a.id + '">Mark as unread</a>' +
-              '<a class="ap-dv-dismiss" href="#" data-dismiss-id="' + a.id + '">Dismiss alert</a>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="ap-dv-divider"></div>' +
-        '<div class="ap-dv-bullets">' + bulletsHtml + '</div>' +
-        '<div class="ap-dv-actions">' +
-          '<div class="ap-dv-actions-label">Recommended Action(s):</div>' +
-          '<ul class="ap-dv-action-list">' + actionsHtml + '</ul>' +
-          '<div class="ap-dv-projections">' + projHtml + '</div>' +
-          (allApplied
-            ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
-            : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>') +
-        '</div>' +
+      '<div class="ap-dv-bullets">' + bulletsHtml + '</div>' +
+      '<div class="ap-dv-actions">' +
+        '<div class="ap-dv-actions-label">Recommended Action(s):</div>' +
+        '<ul class="ap-dv-action-list">' + actionsHtml + '</ul>' +
+        '<div class="ap-dv-projections">' + projHtml + '</div>' +
+        (allApplied
+          ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
+          : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>') +
+      '</div>' +
+      '<div class="ap-dv-meta">' +
+        '<span class="ap-dv-received">Received ' + fmtTimeAgo(a.received) + ' ago</span>' +
+        '<button class="ap-dv-mark-unread" data-markunread-id="' + a.id + '">Mark as unread</button>' +
+        '<button class="ap-dv-dismiss" data-dismiss-id="' + a.id + '">Dismiss alert</button>' +
       '</div>';
 
     apDetail.querySelector('.ap-dv-dismiss').addEventListener('click', function (e) {
-      e.preventDefault(); e.stopPropagation();
+      e.stopPropagation();
       var did = parseInt(this.getAttribute('data-dismiss-id'), 10);
       closeDetail();
       dismissAlert(did);
     });
     apDetail.querySelector('.ap-dv-mark-unread').addEventListener('click', function (e) {
-      e.preventDefault(); e.stopPropagation();
+      e.stopPropagation();
       var uid = parseInt(this.getAttribute('data-markunread-id'), 10);
-      var alert = ALL_ALERTS.filter(function (x) { return x.id === uid; })[0];
-      if (alert) { alert.status = 'unread'; }
+      var al = ALL_ALERTS.filter(function (x) { return x.id === uid; })[0];
+      if (al) { al.status = 'unread'; }
       closeDetail();
       renderAlerts(currentPage);
       updateBadge();
@@ -5702,10 +5704,15 @@
     }
     renderDetail(id);
     panel.classList.add('ap-detail-open');
+    // Focus the chat footer input after the transition
+    setTimeout(function () { apChatFootInput.focus({ preventScroll: true }); }, 50);
   }
 
   function closeDetail() {
     currentDetailId = null;
+    apDvCardHeader.innerHTML = '';
+    apChatFootInput.value = '';
+    apChatFootInput.style.height = 'auto';
     panel.classList.remove('ap-detail-open');
   }
   // ────────────────────────────────────────────────────────────────────────────
@@ -6291,12 +6298,84 @@
     enterApChatMode(msg);
   }
 
-  // Footer input — continues an existing chat thread
+  // Footer input — continues chat OR starts one from the detail view
   function apChatFootSubmit() {
     var msg = apChatFootInput.value.trim();
     if (!msg) return;
     apChatFootInput.value = '';
     apChatFootInput.style.height = 'auto';
+
+    if (panel.classList.contains('ap-detail-open')) {
+      // Transition: detail view → chat view
+      var a = ALL_ALERTS.filter(function (x) { return x.id === currentDetailId; })[0];
+      var alertTitle = a ? a.title : 'Alert';
+
+      // Pre-populate chat view with the alert content as a system message
+      apChatView.innerHTML = '';
+      var sysBlock = document.createElement('div');
+      sysBlock.className = 'ai-response';
+      // Bullets
+      var bulletsDiv = document.createElement('div');
+      bulletsDiv.className = 'ap-dv-bullets';
+      a.description.split(' | ').forEach(function (b) {
+        var item = document.createElement('div');
+        item.className = 'ap-dv-bullet-item';
+        item.innerHTML = '<div class="ap-dv-bullet">' + b.trim() + '</div>' +
+          '<a class="ap-dv-view-ctx" href="#" onclick="return false;">View in Context<span class="material-icons-round mi">open_in_new</span></a>';
+        bulletsDiv.appendChild(item);
+      });
+      sysBlock.appendChild(bulletsDiv);
+      // Actions box
+      var allActions = a.action.split(' | ').map(function (s) { return s.trim(); });
+      var applied = appliedActions[a.id] || [];
+      var actionsHtml = allActions.map(function (act) {
+        var isApplied = applied.indexOf(act) !== -1;
+        return '<li class="ap-dv-action-item' + (isApplied ? ' ap-applied' : '') + '">' +
+          '<span class="material-icons-round ap-action-icon">' + (isApplied ? 'check' : 'fiber_manual_record') + '</span>' +
+          '<span class="ap-action-text">' + act + '</span></li>';
+      }).join('');
+      var allApplied = allActions.length > 0 && allActions.every(function (act) { return applied.indexOf(act) !== -1; });
+      var projHtml = a.projections.map(function (p) {
+        var vc = p.value.charAt(0) === '+' ? ' pos' : (p.value.charAt(0) === '-' ? ' neg' : '');
+        return '<div class="ap-dv-proj-card"><div class="ap-dv-proj-label">' + p.label + '</div>' +
+          '<div class="ap-dv-proj-value' + vc + '">' + p.value + '</div>' +
+          '<div class="ap-dv-proj-sub">' + p.subtitle + '</div></div>';
+      }).join('');
+      var actBox = document.createElement('div');
+      actBox.className = 'ap-dv-actions';
+      actBox.innerHTML = '<div class="ap-dv-actions-label">Recommended Action(s):</div>' +
+        '<ul class="ap-dv-action-list">' + actionsHtml + '</ul>' +
+        '<div class="ap-dv-projections">' + projHtml + '</div>' +
+        (allApplied
+          ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
+          : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>');
+      sysBlock.appendChild(actBox);
+      apChatView.appendChild(sysBlock);
+
+      // User bubble
+      var bubble = document.createElement('div');
+      bubble.className = 'ai-bubble-user';
+      bubble.textContent = msg;
+      apChatView.appendChild(bubble);
+
+      // Save to history with the alert title (prepend if new)
+      var alreadyInHistory = CHAT_HISTORY.some(function (h) { return h.title === alertTitle; });
+      if (!alreadyInHistory) {
+        CHAT_HISTORY.unshift({ title: alertTitle, time: 'Just now', daysAgo: 0 });
+      }
+
+      // Transition state
+      panel.classList.remove('ap-detail-open');
+      apDvCardHeader.innerHTML = '';
+      panel.classList.add('ap-chat-open');
+      apTitleEl.textContent = alertTitle;
+
+      apAppendResponse(apChatView, msg);
+      setTimeout(function () { apChatFootInput.focus({ preventScroll: true }); }, 50);
+      return;
+    }
+
+    // Normal chat continuation
     var bubble = document.createElement('div');
     bubble.className = 'ai-bubble-user';
     bubble.textContent = msg;
