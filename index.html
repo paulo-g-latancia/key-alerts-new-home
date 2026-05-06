@@ -1629,7 +1629,7 @@
     .ap-head-history-btn[data-tooltip]:hover::after { opacity: 1; }
     /* ── Chat history view ── */
     .ap-history-view {
-      display: none; flex: 1; overflow-y: auto; min-height: 0;
+      display: none; flex: 1; min-height: 0;
       flex-direction: column;
     }
     .alerts-panel.ap-history-open .ap-history-view { display: flex; }
@@ -1638,12 +1638,51 @@
     .alerts-panel.ap-history-open .ap-actions,
     .alerts-panel.ap-history-open .ap-header-input-area { display: none; }
     .alerts-panel.ap-history-open .ap-header { padding-top: 8px; padding-bottom: 8px; gap: 0; }
-    .alerts-panel.ap-history-open #ap-dv-back-btn { display: flex; }
-    .ap-history-section-label {
-      padding: 12px 16px 6px;
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-sec);
+    /* Toolbar: search + sort */
+    .ap-history-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; flex-shrink: 0;
+      border-bottom: 1px solid var(--grey-200);
     }
+    .ap-history-search-wrap {
+      flex: 1; display: flex; align-items: center; gap: 6px;
+      border: 1px solid var(--grey-300); border-radius: 4px;
+      padding: 4px 8px; background: white;
+    }
+    .ap-history-search-wrap .mi { font-size: 16px; color: var(--text-sec); flex-shrink: 0; }
+    .ap-history-search-input {
+      flex: 1; border: none; outline: none;
+      font-family: 'Lato', sans-serif; font-size: 13px;
+      color: var(--text-primary); background: transparent;
+    }
+    .ap-history-search-input::placeholder { color: #8A9096; }
+    .ap-history-sort-wrap { position: relative; flex-shrink: 0; }
+    .ap-history-sort-btn {
+      display: flex; align-items: center; gap: 2px;
+      padding: 5px 8px; border: 1px solid var(--grey-300); border-radius: 4px;
+      background: white; cursor: pointer; font-size: 12px;
+      color: var(--text-sec); font-family: 'Lato', sans-serif;
+      white-space: nowrap; transition: background 0.15s;
+    }
+    .ap-history-sort-btn .mi { font-size: 16px; }
+    .ap-history-sort-btn:hover { background: var(--grey-200); }
+    .ap-history-sort-menu {
+      position: absolute; top: calc(100% + 4px); right: 0;
+      background: white; border: 1px solid var(--grey-300);
+      border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      z-index: 200; min-width: 168px; display: none; overflow: hidden;
+    }
+    .ap-history-sort-menu.open { display: block; }
+    .ap-history-sort-option {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px; font-size: 13px; color: var(--text-primary);
+      cursor: pointer; font-family: 'Lato', sans-serif;
+    }
+    .ap-history-sort-option:hover { background: var(--grey-50); }
+    .ap-history-sort-option .check-icon { font-size: 16px; color: var(--blue-700); visibility: hidden; }
+    .ap-history-sort-option.selected .check-icon { visibility: visible; }
+    /* Scrollable list */
+    .ap-history-list { flex: 1; overflow-y: auto; min-height: 0; }
     .ap-history-item {
       display: flex; align-items: center; gap: 12px;
       padding: 12px 16px; cursor: pointer;
@@ -1651,12 +1690,6 @@
       transition: background 0.1s;
     }
     .ap-history-item:hover { background: var(--grey-50); }
-    .ap-history-item-icon {
-      width: 32px; height: 32px; flex-shrink: 0;
-      border-radius: 50%; background: #e8f5e9;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .ap-history-item-icon .mi { font-size: 16px; color: var(--blue-700); }
     .ap-history-item-body { flex: 1; min-width: 0; }
     .ap-history-item-title {
       font-size: 14px; color: var(--text-primary);
@@ -1665,6 +1698,10 @@
     }
     .ap-history-item-time { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
     .ap-history-item-chevron { font-size: 18px; color: var(--text-sec); flex-shrink: 0; }
+    .ap-history-empty {
+      padding: 32px 16px; text-align: center;
+      font-size: 13px; color: var(--text-sec);
+    }
 
     .ap-pagination {
       display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -6317,49 +6354,124 @@
     });
   });
 
-  // Close suggestions on outside click
+  // Close dropdowns on outside click
   document.addEventListener('click', function () {
     apSuggestionsMenu.classList.remove('open');
+    var hm = document.getElementById('ap-history-sort-menu');
+    if (hm) hm.classList.remove('open');
   });
 
   /* ── Chat History ─────────────────────────────────── */
   var apHistoryView = document.getElementById('ap-history-view');
 
   var CHAT_HISTORY = [
-    { title: 'Help me plan the next 7 days',                         time: '2d ago' },
-    { title: 'Which segments are pacing behind forecast?',            time: '3d ago' },
-    { title: 'What happens to my forecast if I increase BAR by 5%?', time: '5d ago' },
-    { title: 'How did we finish yesterday vs. STLY?',                 time: '1w ago' },
+    { title: 'Help me plan the next 7 days',                         time: '2d ago',  daysAgo: 2 },
+    { title: 'Which segments are pacing behind forecast?',            time: '3d ago',  daysAgo: 3 },
+    { title: 'What happens to my forecast if I increase BAR by 5%?', time: '5d ago',  daysAgo: 5 },
+    { title: 'How did we finish yesterday vs. STLY?',                 time: '1w ago',  daysAgo: 7 },
   ];
 
-  function buildHistoryView() {
-    apHistoryView.innerHTML = '';
-    var label = document.createElement('div');
-    label.className = 'ap-history-section-label';
-    label.textContent = 'Recent conversations';
-    apHistoryView.appendChild(label);
+  var historySort   = 'newest'; // 'newest' | 'oldest' | 'az'
+  var historySearch = '';
 
-    CHAT_HISTORY.forEach(function (entry) {
+  var HISTORY_SORT_LABELS = { newest: 'Most recent', oldest: 'Oldest first', az: 'A–Z' };
+
+  function renderHistoryList() {
+    var list = document.getElementById('ap-history-list');
+    if (!list) return;
+
+    var q = historySearch.toLowerCase();
+    var filtered = CHAT_HISTORY.filter(function (e) {
+      return !q || e.title.toLowerCase().indexOf(q) !== -1;
+    });
+
+    filtered.sort(function (a, b) {
+      if (historySort === 'newest') return a.daysAgo - b.daysAgo;
+      if (historySort === 'oldest') return b.daysAgo - a.daysAgo;
+      return a.title.localeCompare(b.title);
+    });
+
+    list.innerHTML = '';
+
+    if (!filtered.length) {
+      var empty = document.createElement('div');
+      empty.className = 'ap-history-empty';
+      empty.textContent = 'No conversations found.';
+      list.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(function (entry) {
       var item = document.createElement('div');
       item.className = 'ap-history-item';
       item.innerHTML =
-        '<div class="ap-history-item-icon"><span class="material-icons-round mi">chat_bubble_outline</span></div>' +
         '<div class="ap-history-item-body">' +
           '<div class="ap-history-item-title">' + entry.title + '</div>' +
           '<div class="ap-history-item-time">' + entry.time + '</div>' +
         '</div>' +
         '<span class="material-icons-round ap-history-item-chevron">chevron_right</span>';
-      item.addEventListener('click', function () {
-        enterApChatMode(entry.title);
-      });
-      apHistoryView.appendChild(item);
+      item.addEventListener('click', function () { enterApChatMode(entry.title); });
+      list.appendChild(item);
     });
   }
 
   function enterApHistoryMode() {
-    buildHistoryView();
+    historySort   = 'newest';
+    historySearch = '';
+
+    apHistoryView.innerHTML =
+      '<div class="ap-history-toolbar">' +
+        '<div class="ap-history-search-wrap">' +
+          '<span class="material-icons-round mi">search</span>' +
+          '<input class="ap-history-search-input" id="ap-history-search" placeholder="Search conversations…" />' +
+        '</div>' +
+        '<div class="ap-history-sort-wrap">' +
+          '<button class="ap-history-sort-btn" id="ap-history-sort-btn">' +
+            '<span class="material-icons-round mi">sort</span>' +
+            '<span id="ap-history-sort-label">' + HISTORY_SORT_LABELS[historySort] + '</span>' +
+            '<span class="material-icons-round mi">expand_more</span>' +
+          '</button>' +
+          '<div class="ap-history-sort-menu" id="ap-history-sort-menu">' +
+            '<div class="ap-history-sort-option selected" data-sort="newest">Most recent first <span class="material-icons-round check-icon">check</span></div>' +
+            '<div class="ap-history-sort-option" data-sort="oldest">Most recent last <span class="material-icons-round check-icon">check</span></div>' +
+            '<div class="ap-history-sort-option" data-sort="az">A–Z by title <span class="material-icons-round check-icon">check</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ap-history-list" id="ap-history-list"></div>';
+
+    // Search
+    document.getElementById('ap-history-search').addEventListener('input', function () {
+      historySearch = this.value;
+      renderHistoryList();
+    });
+
+    // Sort
+    var sortBtn   = document.getElementById('ap-history-sort-btn');
+    var sortMenu  = document.getElementById('ap-history-sort-menu');
+    var sortLabel = document.getElementById('ap-history-sort-label');
+
+    sortBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      sortMenu.classList.toggle('open');
+    });
+
+    sortMenu.querySelectorAll('.ap-history-sort-option').forEach(function (opt) {
+      opt.addEventListener('click', function (e) {
+        e.stopPropagation();
+        historySort = opt.getAttribute('data-sort');
+        sortLabel.textContent = HISTORY_SORT_LABELS[historySort];
+        sortMenu.querySelectorAll('.ap-history-sort-option').forEach(function (o) {
+          o.classList.toggle('selected', o === opt);
+        });
+        sortMenu.classList.remove('open');
+        renderHistoryList();
+      });
+    });
+
     panel.classList.add('ap-history-open');
     apTitleEl.textContent = 'Chat history';
+    renderHistoryList();
   }
 
   function closeApHistory() {
