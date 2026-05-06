@@ -1092,6 +1092,17 @@
       padding: 4px 12px;
       flex-shrink: 0;
     }
+    .ap-actions-spacer { flex: 1; }
+    .ap-mark-all-read-btn {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px; border: none; background: none;
+      border-radius: 4px; cursor: pointer;
+      font-size: 12px; font-family: 'Lato', sans-serif;
+      color: var(--text-sec); transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .ap-mark-all-read-btn .mi { font-size: 15px; }
+    .ap-mark-all-read-btn:hover { background: var(--grey-200); color: var(--text-primary); }
     .ap-header-btn {
       width: 32px; height: 32px;
       border-radius: 22px; border: none; background: none;
@@ -2572,6 +2583,10 @@
         </button>
         <button class="ap-header-btn" id="ap-search-btn" data-tooltip="Search" aria-label="Search">
           <span class="material-icons-round mi">search</span>
+        </button>
+        <div class="ap-actions-spacer"></div>
+        <button class="ap-mark-all-read-btn" id="ap-mark-all-read-btn" aria-label="Mark all as read">
+          <span class="material-icons-round mi">done_all</span>Mark all as read
         </button>
       </div>
 
@@ -5692,6 +5707,23 @@
       a.status = 'unread';
       renderAlerts(currentPage);
       updateTablePills([id]);
+      updateBadge();
+    }
+  });
+
+  // Mark all as read
+  document.getElementById('ap-mark-all-read-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var ids = [];
+    ALL_ALERTS.forEach(function (a) {
+      if (a.status !== 'read') {
+        a.status = 'read';
+        ids.push(a.id);
+      }
+    });
+    if (ids.length) {
+      renderAlerts(currentPage);
+      updateTablePills(ids);
       updateBadge();
     }
   });
