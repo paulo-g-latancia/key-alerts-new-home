@@ -5159,6 +5159,18 @@
     });
   }
 
+  function fmtTimeAgo(raw) {
+    var s = String(raw).trim().toLowerCase();
+    // Already in short form (e.g. "3h", "35m") — just return as-is
+    if (/^\d+(m|h|d|w|mo|y)$/.test(s)) return raw;
+    var m = s.match(/^(\d+)\s*(minute|min|hour|day|week|month|year)s?$/);
+    if (!m) return raw; // unrecognised — pass through unchanged
+    var n    = m[1];
+    var unit = m[2];
+    var abbr = { minute: 'm', min: 'm', hour: 'h', day: 'd', week: 'w', month: 'mo', year: 'y' }[unit];
+    return n + abbr;
+  }
+
   function renderAlerts(page) {
     var showRegion = (currentProperty === 'cluster-11-50' || currentProperty === 'cluster-51plus');
     var data       = getDisplayData();
@@ -5207,7 +5219,7 @@
             '<div class="ap-alert-date">' +
               '<span class="ap-alert-dow">' + dow + '</span>' +
               '<span class="ap-alert-day">' + day + '</span>' +
-              '<span class="ap-alert-time">' + a.received + ' ago</span>' +
+              '<span class="ap-alert-time">' + fmtTimeAgo(a.received) + ' ago</span>' +
             '</div>' +
             '<div class="ap-alert-info">' +
               '<div class="ap-alert-tags-row">' +
@@ -5347,7 +5359,7 @@
               '<div class="ap-dv-title">' + a.title + '</div>' +
             '</div>' +
             '<div class="ap-dv-meta">' +
-              '<span class="ap-dv-received">Received ' + a.received + ' ago</span>' +
+              '<span class="ap-dv-received">Received ' + fmtTimeAgo(a.received) + ' ago</span>' +
               '<a class="ap-dv-mark-unread" href="#" data-markunread-id="' + a.id + '">Mark as unread</a>' +
               '<a class="ap-dv-dismiss" href="#" data-dismiss-id="' + a.id + '">Dismiss alert</a>' +
             '</div>' +
