@@ -2822,7 +2822,7 @@
     panel.removeAttribute('aria-hidden');
     alertsBtn.classList.add('sp-active');
     updateBadge();
-    setTimeout(function () { document.getElementById('ap-chat-input').focus(); }, 50);
+    setTimeout(function () { document.getElementById('ap-chat-input').focus({ preventScroll: true }); }, 50);
   }
 
   function closePanel() {
@@ -6010,7 +6010,7 @@
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
     apChatWrap.classList.remove('has-text');
-    apChatInput.focus();
+    apChatInput.focus({ preventScroll: true });
   }
 
   function apChatSubmit() {
