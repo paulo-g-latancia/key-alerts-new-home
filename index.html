@@ -1512,6 +1512,14 @@
     .ap-alert-chevron { font-size: 18px; color: var(--blue-700); flex-shrink: 0; padding-right: 4px; }
 
     /* ── Pagination ── */
+    /* ── Chat input footer ── */
+    .ap-chat-foot {
+      flex-shrink: 0;
+      padding: 12px 16px;
+      border-top: 1px solid var(--grey-300);
+      background: white;
+    }
+
     .ap-pagination {
       display: flex; align-items: center; justify-content: center; gap: 12px;
       padding: 10px 16px; border-top: 1px solid var(--grey-300);
@@ -2419,6 +2427,16 @@
           </button>
         </div>
         <div class="ap-toast-bar" id="ap-toast-bar"></div>
+      </div>
+
+      <!-- Chat input footer -->
+      <div class="ap-chat-foot">
+        <div class="ai-input-row">
+          <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="Ask AI Assistant…"></textarea>
+          <button class="ai-send-btn" id="ap-chat-send-btn" aria-label="Send">
+            <span class="material-icons-round mi">send</span>
+          </button>
+        </div>
       </div>
 
     </div><!-- /alerts-panel -->
@@ -5877,6 +5895,33 @@
 
   /* ── Send button is decorative-only in this prototype ── */
   aiSendBtn.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  /* ── Alerts panel chat input ── */
+  var apChatInput   = document.getElementById('ap-chat-input');
+  var apChatSendBtn = document.getElementById('ap-chat-send-btn');
+
+  function apChatAutoResize() {
+    apChatInput.style.height = 'auto';
+    apChatInput.style.height = Math.min(apChatInput.scrollHeight, 160) + 'px';
+  }
+
+  apChatInput.addEventListener('input', apChatAutoResize);
+
+  apChatInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Prototype: clear input on submit
+      apChatInput.value = '';
+      apChatInput.style.height = 'auto';
+    }
+  });
+
+  apChatSendBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    // Prototype: clear input on submit
+    apChatInput.value = '';
+    apChatInput.style.height = 'auto';
+  });
 
   /* ── Today's Priority → AI chat ─────────────────────── */
   var PRIORITY_DATA = {
