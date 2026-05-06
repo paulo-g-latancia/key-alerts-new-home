@@ -1511,8 +1511,53 @@
       position: relative;
       flex: 1;
       display: flex;
-      align-items: flex-end;
+      align-items: center;
+      border: 1px solid var(--blue-700);
+      border-radius: 4px;
+      padding: 4px 6px 4px 8px;
+      gap: 6px;
+      background: white;
     }
+    /* Strip the textarea's own border — the wrapper owns it now */
+    .ap-chat-foot .ai-textarea {
+      border: none !important;
+      border-radius: 0;
+      padding: 2px 0;
+      min-height: unset;
+      outline: none !important;
+      box-shadow: none;
+    }
+    .ap-suggestions-btn {
+      display: inline-flex; align-items: center; gap: 2px;
+      padding: 2px 6px; flex-shrink: 0;
+      background: var(--grey-200); border: none; border-radius: 8px;
+      cursor: pointer; font-size: 11px; color: var(--text-sec);
+      font-family: 'Lato', sans-serif; white-space: nowrap;
+      transition: background 0.15s; line-height: normal;
+    }
+    .ap-suggestions-btn:hover { background: var(--grey-300); }
+    .ap-suggestions-btn .mi { font-size: 12px; }
+    .ap-suggestions-menu {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0; right: 0;
+      background: white;
+      border: 1px solid var(--grey-300);
+      border-radius: 4px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.10);
+      z-index: 200;
+      display: none;
+      overflow: hidden;
+    }
+    .ap-suggestions-menu.open { display: block; }
+    .ap-suggestions-item {
+      padding: 10px 14px;
+      font-size: 13px; color: var(--text-primary);
+      cursor: pointer; line-height: 1.3;
+      font-family: 'Lato', sans-serif;
+    }
+    .ap-suggestions-item:hover { background: var(--grey-50); }
+    .ap-suggestions-item + .ap-suggestions-item { border-top: 1px solid var(--grey-200); }
     .ap-chat-foot .ai-send-btn {
       background: var(--blue-700);
       border-color: var(--blue-700);
@@ -2450,6 +2495,15 @@
         <div class="ai-input-row">
           <div class="ap-chat-input-wrap" id="ap-chat-input-wrap">
             <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="Ask anything"></textarea>
+            <button class="ap-suggestions-btn" id="ap-suggestions-btn" type="button">
+              Suggestions <span class="material-icons-round mi">expand_more</span>
+            </button>
+            <div class="ap-suggestions-menu" id="ap-suggestions-menu">
+              <div class="ap-suggestions-item" data-suggestion="Help me plan the next 7 days">Help me plan the next 7 days</div>
+              <div class="ap-suggestions-item" data-suggestion="Which segments are pacing behind forecast?">Which segments are pacing behind forecast?</div>
+              <div class="ap-suggestions-item" data-suggestion="What happens to my forecast if I increase BAR by 5%?">What happens to my forecast if I increase BAR by 5%?</div>
+              <div class="ap-suggestions-item" data-suggestion="How did we finish yesterday vs. STLY?">How did we finish yesterday vs. STLY?</div>
+            </div>
           </div>
           <button class="ai-send-btn" id="ap-chat-send-btn" aria-label="Send">
             <span class="material-icons-round mi">send</span>
@@ -5998,6 +6052,7 @@
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
     apChatWrap.classList.remove('has-text');
+    document.getElementById('ap-suggestions-menu').classList.remove('open');
     apChatInput.focus({ preventScroll: true });
   }
 
@@ -6035,6 +6090,29 @@
   apChatSendBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     apChatSubmit();
+  });
+
+  /* ── Suggestions dropdown ─────────────────────────── */
+  var apSuggestionsBtn  = document.getElementById('ap-suggestions-btn');
+  var apSuggestionsMenu = document.getElementById('ap-suggestions-menu');
+
+  apSuggestionsBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    apSuggestionsMenu.classList.toggle('open');
+  });
+
+  apSuggestionsMenu.querySelectorAll('.ap-suggestions-item').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+      e.stopPropagation();
+      apSuggestionsMenu.classList.remove('open');
+      var suggestion = item.getAttribute('data-suggestion');
+      enterApChatMode(suggestion);
+    });
+  });
+
+  // Close suggestions on outside click
+  document.addEventListener('click', function () {
+    apSuggestionsMenu.classList.remove('open');
   });
 
   /* ── Today's Priority → AI chat ─────────────────────── */
