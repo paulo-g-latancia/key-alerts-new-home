@@ -1519,6 +1519,29 @@
       border-top: 1px solid var(--grey-300);
       background: white;
     }
+    .ap-chat-input-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+    }
+    .ap-chat-icon {
+      position: absolute;
+      left: 8px;
+      bottom: 7px;
+      font-size: 16px;
+      color: #8A9096;
+      pointer-events: none;
+      transition: opacity 0.1s;
+    }
+    .ap-chat-input-wrap.has-text .ap-chat-icon { opacity: 0; }
+    .ap-chat-foot .ai-textarea { padding-left: 30px; }
+    .ap-chat-foot .ai-send-btn {
+      background: var(--blue-700);
+      border-color: var(--blue-700);
+    }
+    .ap-chat-foot .ai-send-btn .mi { color: white; }
+    .ap-chat-foot .ai-send-btn:hover { background: var(--blue-500); border-color: var(--blue-500); }
 
     .ap-pagination {
       display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -2448,7 +2471,10 @@
       <!-- Chat input footer -->
       <div class="ap-chat-foot">
         <div class="ai-input-row">
-          <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="Ask AI Assistant…"></textarea>
+          <div class="ap-chat-input-wrap" id="ap-chat-input-wrap">
+            <span class="material-icons-round ap-chat-icon">auto_awesome</span>
+            <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="ask anything"></textarea>
+          </div>
           <button class="ai-send-btn" id="ap-chat-send-btn" aria-label="Send">
             <span class="material-icons-round mi">send</span>
           </button>
@@ -2808,6 +2834,7 @@
     panel.removeAttribute('aria-hidden');
     alertsBtn.classList.add('sp-active');
     updateBadge();
+    setTimeout(function () { document.getElementById('ap-chat-input').focus(); }, 50);
   }
 
   function closePanel() {
@@ -5934,6 +5961,7 @@
   var apChatSendBtn = document.getElementById('ap-chat-send-btn');
   var apChatView    = document.getElementById('ap-chat-view');
   var apTitleEl     = document.querySelector('.ap-title');
+  var apChatWrap    = document.getElementById('ap-chat-input-wrap');
 
   function apChatAutoResize() {
     apChatInput.style.height = 'auto';
@@ -5993,6 +6021,8 @@
     apChatView.innerHTML = '';
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
+    apChatWrap.classList.remove('has-text');
+    apChatInput.focus();
   }
 
   function apChatSubmit() {
@@ -6014,7 +6044,10 @@
     }
   }
 
-  apChatInput.addEventListener('input', apChatAutoResize);
+  apChatInput.addEventListener('input', function () {
+    apChatAutoResize();
+    apChatWrap.classList.toggle('has-text', apChatInput.value.length > 0);
+  });
 
   apChatInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
