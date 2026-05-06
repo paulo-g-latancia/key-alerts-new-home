@@ -1053,17 +1053,41 @@
     /* ── Panel header ── */
     .ap-header {
       display: flex;
-      align-items: center;
-      gap: 2px;
-      padding: 10px 12px 10px 16px;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px 16px 8px 16px;
       border-bottom: 1px solid var(--grey-300);
       flex-shrink: 0;
       position: relative;
     }
+    .ap-header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      width: 100%;
+    }
+    .ap-header-input-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      padding: 8px;
+      width: 100%;
+      flex-shrink: 0;
+    }
     .ap-title {
-      font-size: 16px; font-weight: 700;
+      font-size: 20px; font-weight: 400;
       color: var(--text-primary);
       flex: 1;
+    }
+    /* ── Actions row (sort / filter / search) ── */
+    .ap-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 12px;
+      flex-shrink: 0;
     }
     .ap-header-btn {
       width: 32px; height: 32px;
@@ -1500,13 +1524,7 @@
     .ap-alert-chevron { font-size: 18px; color: var(--blue-700); flex-shrink: 0; padding-right: 4px; }
 
     /* ── Pagination ── */
-    /* ── Chat input footer ── */
-    .ap-chat-foot {
-      flex-shrink: 0;
-      padding: 12px 16px;
-      border-top: 1px solid var(--grey-300);
-      background: white;
-    }
+    /* ── Header input area elements ── */
     .ap-chat-input-wrap {
       position: relative;
       flex: 1;
@@ -1518,8 +1536,8 @@
       gap: 6px;
       background: white;
     }
-    /* Strip the textarea's own border — the wrapper owns it now */
-    .ap-chat-foot .ai-textarea {
+    /* Strip the textarea's own border — the wrapper owns it */
+    .ap-header-input-area .ai-textarea {
       border: none !important;
       border-radius: 0;
       padding: 2px 0;
@@ -1539,12 +1557,12 @@
     .ap-suggestions-btn .mi { font-size: 12px; }
     .ap-suggestions-menu {
       position: absolute;
-      bottom: calc(100% + 6px);
+      top: calc(100% + 6px);
       left: 0; right: 0;
       background: white;
       border: 1px solid var(--grey-300);
       border-radius: 4px;
-      box-shadow: 0 -4px 16px rgba(0,0,0,0.10);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
       z-index: 200;
       display: none;
       overflow: hidden;
@@ -1558,12 +1576,26 @@
     }
     .ap-suggestions-item:hover { background: var(--grey-50); }
     .ap-suggestions-item + .ap-suggestions-item { border-top: 1px solid var(--grey-200); }
-    .ap-chat-foot .ai-send-btn {
-      background: var(--blue-700);
-      border-color: var(--blue-700);
+    /* Send button (primary, solid) */
+    .ap-head-send-btn {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border: none; border-radius: 4px;
+      background: var(--blue-700); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
     }
-    .ap-chat-foot .ai-send-btn .mi { color: white; }
-    .ap-chat-foot .ai-send-btn:hover { background: var(--blue-500); border-color: var(--blue-500); }
+    .ap-head-send-btn .mi { font-size: 20px; color: white; }
+    .ap-head-send-btn:hover { background: var(--blue-500); }
+    /* History button (outlined) */
+    .ap-head-history-btn {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border: 1px solid var(--blue-700); border-radius: 4px;
+      background: white; cursor: pointer; color: var(--blue-700);
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .ap-head-history-btn .mi { font-size: 20px; color: var(--blue-700); }
+    .ap-head-history-btn:hover { background: #e8f5e9; }
 
     .ap-pagination {
       display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -1590,9 +1622,7 @@
     .alerts-panel.ap-detail-open .ap-content,
     .alerts-panel.ap-detail-open .ap-pagination { display: none; }
     .alerts-panel.ap-detail-open .ap-detail  { display: block; }
-    .alerts-panel.ap-detail-open #ap-sort-btn,
-    .alerts-panel.ap-detail-open #ap-filter-btn,
-    .alerts-panel.ap-detail-open #ap-search-btn { display: none; }
+    .alerts-panel.ap-detail-open .ap-actions { display: none; }
     /* Back button: hidden in list view, shown in detail or chat view */
     #ap-dv-back-btn { display: none; }
     .alerts-panel.ap-detail-open #ap-dv-back-btn,
@@ -1606,9 +1636,7 @@
     .alerts-panel.ap-chat-open .ap-content,
     .alerts-panel.ap-chat-open .ap-pagination { display: none; }
     .alerts-panel.ap-chat-open .ap-chat-view { display: flex; }
-    .alerts-panel.ap-chat-open #ap-sort-btn,
-    .alerts-panel.ap-chat-open #ap-filter-btn,
-    .alerts-panel.ap-chat-open #ap-search-btn { display: none; }
+    .alerts-panel.ap-chat-open .ap-actions { display: none; }
 
 
     .ap-dv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
@@ -2288,25 +2316,37 @@
 
       <!-- Header -->
       <div class="ap-header">
-        <button class="ap-header-btn" id="ap-dv-back-btn" data-tooltip="Back" aria-label="Back">
-          <span class="material-icons-round mi">chevron_left</span>
-        </button>
-        <h2 class="ap-title">AI Assistant</h2>
-        <button class="ap-header-btn" id="ap-sort-btn" data-tooltip="Sort" aria-label="Sort">
-          <span class="material-icons-round mi">sort</span>
-        </button>
-        <button class="ap-header-btn" id="ap-filter-btn" data-tooltip="Filter" aria-label="Filter">
-          <span class="material-icons-round mi">filter_alt</span>
-        </button>
-        <button class="ap-header-btn" id="ap-hotel-filter-btn" data-tooltip="Filter by hotel" aria-label="Filter by hotel" style="display:none">
-          <span class="material-icons-round mi">business</span>
-        </button>
-        <button class="ap-header-btn" id="ap-search-btn" data-tooltip="Search" aria-label="Search">
-          <span class="material-icons-round mi">search</span>
-        </button>
-        <button class="ap-header-btn" id="ap-close-btn" aria-label="Close">
-          <span class="material-icons-round mi">close</span>
-        </button>
+        <!-- Title row -->
+        <div class="ap-header-title-row">
+          <button class="ap-header-btn" id="ap-dv-back-btn" data-tooltip="Back" aria-label="Back">
+            <span class="material-icons-round mi">chevron_left</span>
+          </button>
+          <h2 class="ap-title">AI Assistant</h2>
+          <button class="ap-header-btn" id="ap-close-btn" aria-label="Close">
+            <span class="material-icons-round mi">close</span>
+          </button>
+        </div>
+        <!-- Input area (green background) -->
+        <div class="ap-header-input-area">
+          <div class="ap-chat-input-wrap" id="ap-chat-input-wrap">
+            <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="Ask anything"></textarea>
+            <button class="ap-suggestions-btn" id="ap-suggestions-btn" type="button">
+              Suggestions <span class="material-icons-round mi">expand_more</span>
+            </button>
+            <div class="ap-suggestions-menu" id="ap-suggestions-menu">
+              <div class="ap-suggestions-item" data-suggestion="Help me plan the next 7 days">Help me plan the next 7 days</div>
+              <div class="ap-suggestions-item" data-suggestion="Which segments are pacing behind forecast?">Which segments are pacing behind forecast?</div>
+              <div class="ap-suggestions-item" data-suggestion="What happens to my forecast if I increase BAR by 5%?">What happens to my forecast if I increase BAR by 5%?</div>
+              <div class="ap-suggestions-item" data-suggestion="How did we finish yesterday vs. STLY?">How did we finish yesterday vs. STLY?</div>
+            </div>
+          </div>
+          <button class="ap-head-send-btn" id="ap-chat-send-btn" aria-label="Send">
+            <span class="material-icons-round mi">send</span>
+          </button>
+          <button class="ap-head-history-btn" id="ap-history-btn" aria-label="History" data-tooltip="History">
+            <span class="material-icons-round mi">history</span>
+          </button>
+        </div>
 
         <!-- Sort dropdown -->
         <div class="ap-sort-menu" id="ap-sort-menu">
@@ -2425,6 +2465,22 @@
         </div>
       </div>
 
+      <!-- Actions row (sort / filter / search) -->
+      <div class="ap-actions" id="ap-actions">
+        <button class="ap-header-btn" id="ap-sort-btn" data-tooltip="Sort" aria-label="Sort">
+          <span class="material-icons-round mi">sort</span>
+        </button>
+        <button class="ap-header-btn" id="ap-filter-btn" data-tooltip="Filter" aria-label="Filter">
+          <span class="material-icons-round mi">filter_alt</span>
+        </button>
+        <button class="ap-header-btn" id="ap-hotel-filter-btn" data-tooltip="Filter by hotel" aria-label="Filter by hotel" style="display:none">
+          <span class="material-icons-round mi">business</span>
+        </button>
+        <button class="ap-header-btn" id="ap-search-btn" data-tooltip="Search" aria-label="Search">
+          <span class="material-icons-round mi">search</span>
+        </button>
+      </div>
+
       <!-- Search bar (shown when search is active) -->
       <div class="ap-search-bar" id="ap-search-bar">
         <span class="material-icons-round mi">search</span>
@@ -2488,27 +2544,6 @@
           </button>
         </div>
         <div class="ap-toast-bar" id="ap-toast-bar"></div>
-      </div>
-
-      <!-- Chat input footer -->
-      <div class="ap-chat-foot">
-        <div class="ai-input-row">
-          <div class="ap-chat-input-wrap" id="ap-chat-input-wrap">
-            <textarea class="ai-textarea" id="ap-chat-input" rows="1" placeholder="Ask anything"></textarea>
-            <button class="ap-suggestions-btn" id="ap-suggestions-btn" type="button">
-              Suggestions <span class="material-icons-round mi">expand_more</span>
-            </button>
-            <div class="ap-suggestions-menu" id="ap-suggestions-menu">
-              <div class="ap-suggestions-item" data-suggestion="Help me plan the next 7 days">Help me plan the next 7 days</div>
-              <div class="ap-suggestions-item" data-suggestion="Which segments are pacing behind forecast?">Which segments are pacing behind forecast?</div>
-              <div class="ap-suggestions-item" data-suggestion="What happens to my forecast if I increase BAR by 5%?">What happens to my forecast if I increase BAR by 5%?</div>
-              <div class="ap-suggestions-item" data-suggestion="How did we finish yesterday vs. STLY?">How did we finish yesterday vs. STLY?</div>
-            </div>
-          </div>
-          <button class="ai-send-btn" id="ap-chat-send-btn" aria-label="Send">
-            <span class="material-icons-round mi">send</span>
-          </button>
-        </div>
       </div>
 
     </div><!-- /alerts-panel -->
