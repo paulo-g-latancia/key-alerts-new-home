@@ -1548,9 +1548,22 @@
     .alerts-panel.ap-detail-open #ap-sort-btn,
     .alerts-panel.ap-detail-open #ap-filter-btn,
     .alerts-panel.ap-detail-open #ap-search-btn { display: none; }
-    /* Back button: hidden in list view, shown in detail view */
+    /* Back button: hidden in list view, shown in detail or chat view */
     #ap-dv-back-btn { display: none; }
-    .alerts-panel.ap-detail-open #ap-dv-back-btn { display: flex; }
+    .alerts-panel.ap-detail-open #ap-dv-back-btn,
+    .alerts-panel.ap-chat-open   #ap-dv-back-btn { display: flex; }
+
+    /* ── Chat view state ── */
+    .ap-chat-view {
+      display: none; flex: 1; overflow-y: auto; min-height: 0;
+      flex-direction: column; gap: 12px; padding: 16px;
+    }
+    .alerts-panel.ap-chat-open .ap-content,
+    .alerts-panel.ap-chat-open .ap-pagination { display: none; }
+    .alerts-panel.ap-chat-open .ap-chat-view { display: flex; }
+    .alerts-panel.ap-chat-open #ap-sort-btn,
+    .alerts-panel.ap-chat-open #ap-filter-btn,
+    .alerts-panel.ap-chat-open #ap-search-btn { display: none; }
 
 
     .ap-dv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
@@ -2417,6 +2430,9 @@
       <!-- Detail view (rendered by JS) -->
       <div class="ap-detail" id="ap-detail"></div>
 
+      <!-- Chat view -->
+      <div class="ap-chat-view" id="ap-chat-view"></div>
+
       <!-- Dismiss confirmation toast -->
       <div class="ap-toast" id="ap-toast" role="status" aria-live="polite">
         <span class="ap-toast-msg" id="ap-toast-msg">Alert dismissed.</span>
@@ -2851,7 +2867,11 @@
   /* ── back button (detail view) ───────────────── */
   document.getElementById('ap-dv-back-btn').addEventListener('click', function (e) {
     e.stopPropagation();
-    closeDetail();
+    if (panel.classList.contains('ap-chat-open')) {
+      closeApChat();
+    } else {
+      closeDetail();
+    }
   });
 
   /* ── close button ────────────────────────────── */
@@ -5763,6 +5783,19 @@
     }
   };
 
+  // Generic fallback for free-text input
+  AI_RESPONSES['__default__'] = {
+    paragraphs: [
+      "I’ve reviewed your question against the current data for <strong>Hotel Barcelona</strong>.",
+      "Based on your pickup trends, pacing, and competitive positioning, here are the key insights and recommended next steps:"
+    ],
+    actions: [
+      'Review your rate strategy for the next 7 days against current comp set positioning',
+      'Check pickup pace on compression dates and adjust BAR accordingly',
+      'Monitor channel mix and adjust distribution to optimise revenue'
+    ]
+  };
+
   // Priority chat response
   AI_RESPONSES['__priority__'] = {
     paragraphs: [
@@ -5899,10 +5932,86 @@
   /* ── Alerts panel chat input ── */
   var apChatInput   = document.getElementById('ap-chat-input');
   var apChatSendBtn = document.getElementById('ap-chat-send-btn');
+  var apChatView    = document.getElementById('ap-chat-view');
+  var apTitleEl     = document.querySelector('.ap-title');
 
   function apChatAutoResize() {
     apChatInput.style.height = 'auto';
     apChatInput.style.height = Math.min(apChatInput.scrollHeight, 160) + 'px';
+  }
+
+  function apAppendResponse(chatView, key) {
+    var loading = document.createElement('div');
+    loading.className = 'ai-loading';
+    loading.innerHTML = '<div class="ai-spinner"></div><span class="ai-loading-text">Thinking…</span>';
+    chatView.appendChild(loading);
+    chatView.scrollTop = chatView.scrollHeight;
+
+    var delay = 1800 + Math.random() * 1400;
+    setTimeout(function () {
+      chatView.removeChild(loading);
+      var resp = AI_RESPONSES[key] || AI_RESPONSES['__default__'];
+      var block = document.createElement('div');
+      block.className = 'ai-response';
+      resp.paragraphs.forEach(function (p) {
+        var para = document.createElement('div');
+        para.className = 'ai-response-para';
+        para.innerHTML = p;
+        block.appendChild(para);
+      });
+      if (resp.actions && resp.actions.length) {
+        var actDiv = document.createElement('div');
+        actDiv.innerHTML = buildActionsHtml(resp.actions);
+        block.appendChild(actDiv.firstChild);
+      }
+      chatView.appendChild(block);
+      chatView.scrollTop = chatView.scrollHeight;
+    }, delay);
+  }
+
+  function enterApChatMode(msg) {
+    msg = msg.trim();
+    if (!msg) return;
+
+    // Switch to chat view
+    panel.classList.add('ap-chat-open');
+    apTitleEl.textContent = msg.length > 46 ? msg.slice(0, 43) + '…' : msg;
+    apChatView.innerHTML = '';
+
+    // User bubble
+    var bubble = document.createElement('div');
+    bubble.className = 'ai-bubble-user';
+    bubble.textContent = msg;
+    apChatView.appendChild(bubble);
+
+    apAppendResponse(apChatView, msg);
+  }
+
+  function closeApChat() {
+    panel.classList.remove('ap-chat-open');
+    apTitleEl.textContent = 'AI Assistant';
+    apChatView.innerHTML = '';
+    apChatInput.value = '';
+    apChatInput.style.height = 'auto';
+  }
+
+  function apChatSubmit() {
+    var msg = apChatInput.value.trim();
+    if (!msg) return;
+    apChatInput.value = '';
+    apChatInput.style.height = 'auto';
+
+    if (panel.classList.contains('ap-chat-open')) {
+      // Continue existing thread
+      var bubble = document.createElement('div');
+      bubble.className = 'ai-bubble-user';
+      bubble.textContent = msg;
+      apChatView.appendChild(bubble);
+      apChatView.scrollTop = apChatView.scrollHeight;
+      apAppendResponse(apChatView, msg);
+    } else {
+      enterApChatMode(msg);
+    }
   }
 
   apChatInput.addEventListener('input', apChatAutoResize);
@@ -5910,17 +6019,13 @@
   apChatInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Prototype: clear input on submit
-      apChatInput.value = '';
-      apChatInput.style.height = 'auto';
+      apChatSubmit();
     }
   });
 
   apChatSendBtn.addEventListener('click', function (e) {
     e.stopPropagation();
-    // Prototype: clear input on submit
-    apChatInput.value = '';
-    apChatInput.style.height = 'auto';
+    apChatSubmit();
   });
 
   /* ── Today's Priority → AI chat ─────────────────────── */
