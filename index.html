@@ -784,20 +784,8 @@
 
     /* ─── AI ASSISTANT PANEL ─────────────────────────── */
     .ai-panel {
-      position: absolute;
-      top: 0; right: 48px; bottom: 0;
-      width: 480px;
-      background: white;
-      border-left: 1px solid var(--grey-300);
-      box-shadow: -3px 0 16px rgba(0,0,0,0.10);
-      z-index: 50;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transform: translateX(calc(100% + 49px));
-      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: none !important;
     }
-    .ai-panel.open { transform: translateX(0); }
 
     /* Panel header */
     .ai-ph {
