@@ -3059,11 +3059,30 @@
     setTimeout(function () { document.getElementById('ap-chat-input').focus({ preventScroll: true }); }, 50);
   }
 
+  function resetPanelToList() {
+    // Strip all sub-view state classes so the panel shows the default alerts list
+    panel.classList.remove('ap-detail-open', 'ap-chat-open', 'ap-alert-chat', 'ap-history-open');
+    // Clear detail view
+    currentDetailId = null;
+    // Clear chat state
+    apTitleEl.textContent = 'AI Assistant';
+    apChatView.innerHTML = '';
+    apDvCardHeader.innerHTML = '';
+    apChatInput.value = '';
+    apChatInput.style.height = 'auto';
+    apChatWrap.classList.remove('has-text');
+    apChatFootInput.value = '';
+    apChatFootInput.style.height = 'auto';
+    currentChatHistoryEntry = null;
+    document.getElementById('ap-suggestions-menu').classList.remove('open');
+  }
+
   function closePanel() {
     panelOpen = false;
     panel.classList.remove('open');
     panel.setAttribute('aria-hidden', 'true');
     alertsBtn.classList.remove('sp-active');
+    resetPanelToList();
     closeSortMenu();
     closeFilterMenu();
     closeHotelFilterMenu();
