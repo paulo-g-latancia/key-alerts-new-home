@@ -1733,10 +1733,12 @@
     /* Compact header + hide green input area in detail mode */
     .alerts-panel.ap-detail-open .ap-header { padding-top: 8px; padding-bottom: 8px; gap: 0; }
     .alerts-panel.ap-detail-open .ap-header-input-area { display: none; }
-    /* Swap title text for mini alert card */
-    .alerts-panel.ap-detail-open .ap-title { display: none; }
+    /* Swap title text for mini alert card (detail view OR alert-originated chat) */
+    .alerts-panel.ap-detail-open .ap-title,
+    .alerts-panel.ap-alert-chat  .ap-title { display: none; }
     #ap-dv-card-header { display: none; flex: 1; min-width: 0; }
-    .alerts-panel.ap-detail-open #ap-dv-card-header { display: flex; }
+    .alerts-panel.ap-detail-open #ap-dv-card-header,
+    .alerts-panel.ap-alert-chat  #ap-dv-card-header { display: flex; }
     /* Mini card: reuse ap-alert-row but non-interactive */
     .ap-dv-header-card { flex: 1 !important; cursor: default !important; }
     .ap-dv-header-card:hover { background: white !important; }
@@ -5406,7 +5408,8 @@
   }
 
   var dismissedIds    = [];
-  var currentDetailId = null;
+  var currentDetailId        = null;
+  var currentChatHistoryEntry = null; // points to the active alert-originated history entry
 
   var DAYS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -6230,53 +6233,145 @@
     apChatFootInput.style.height = Math.min(apChatFootInput.scrollHeight, 160) + 'px';
   }
 
+  // ── Helpers shared by detail→chat and history re-open ───────────────
+
+  function buildAlertCardHtml(a) {
+    var showRegion = (currentProperty === 'cluster-11-50' || currentProperty === 'cluster-51plus');
+    var dow = DAYS[a.date.getDay()];
+    var day = MONTHS_SHORT[a.date.getMonth()] + ' ' + a.date.getDate();
+    var statusClass = a.status === 'read' ? 'ap-read' : 'ap-unread';
+    return '<div class="ap-alert-row ap-dv-header-card ' + statusClass + ' ap-tier-' + a.tier + '">' +
+      '<div class="ap-alert-date">' +
+        '<span class="ap-alert-dow">' + dow + '</span>' +
+        '<span class="ap-alert-day">' + day + '</span>' +
+        '<span class="ap-alert-time">' + fmtTimeAgo(a.received) + ' ago</span>' +
+      '</div>' +
+      '<div class="ap-alert-info">' +
+        '<div class="ap-alert-tags-row">' +
+          '<div class="ap-hotel-tag">' + a.hotel + '</div>' +
+          (showRegion ? '<div class="ap-region-tag">' + a.region + '</div>' : '') +
+          '<div class="ap-alert-type">' + a.category + '</div>' +
+        '</div>' +
+        '<div class="ap-alert-title">' + a.title + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function buildAlertSystemBlock(a) {
+    var allActions = a.action.split(' | ').map(function (s) { return s.trim(); });
+    var applied    = appliedActions[a.id] || [];
+    var actionsHtml = allActions.map(function (act) {
+      var isApplied = applied.indexOf(act) !== -1;
+      return '<li class="ap-dv-action-item' + (isApplied ? ' ap-applied' : '') + '">' +
+        '<span class="material-icons-round ap-action-icon">' + (isApplied ? 'check' : 'fiber_manual_record') + '</span>' +
+        '<span class="ap-action-text">' + act + '</span></li>';
+    }).join('');
+    var allApplied = allActions.length > 0 && allActions.every(function (act) { return applied.indexOf(act) !== -1; });
+    var projHtml = a.projections.map(function (p) {
+      var vc = p.value.charAt(0) === '+' ? ' pos' : (p.value.charAt(0) === '-' ? ' neg' : '');
+      return '<div class="ap-dv-proj-card"><div class="ap-dv-proj-label">' + p.label + '</div>' +
+        '<div class="ap-dv-proj-value' + vc + '">' + p.value + '</div>' +
+        '<div class="ap-dv-proj-sub">' + p.subtitle + '</div></div>';
+    }).join('');
+
+    var sysBlock = document.createElement('div');
+    sysBlock.className = 'ai-response';
+    var bulletsDiv = document.createElement('div');
+    bulletsDiv.className = 'ap-dv-bullets';
+    a.description.split(' | ').forEach(function (b) {
+      var item = document.createElement('div');
+      item.className = 'ap-dv-bullet-item';
+      item.innerHTML = '<div class="ap-dv-bullet">' + b.trim() + '</div>' +
+        '<a class="ap-dv-view-ctx" href="#" onclick="return false;">View in Context' +
+        '<span class="material-icons-round mi">open_in_new</span></a>';
+      bulletsDiv.appendChild(item);
+    });
+    sysBlock.appendChild(bulletsDiv);
+    var actBox = document.createElement('div');
+    actBox.className = 'ap-dv-actions';
+    actBox.innerHTML = '<div class="ap-dv-actions-label">Recommended Action(s):</div>' +
+      '<ul class="ap-dv-action-list">' + actionsHtml + '</ul>' +
+      '<div class="ap-dv-projections">' + projHtml + '</div>' +
+      (allApplied
+        ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
+        : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>');
+    sysBlock.appendChild(actBox);
+    return sysBlock;
+  }
+
+  // ── Open an alert-originated chat from the history list ──────────────
+  function openAlertChatFromHistory(entry) {
+    var a = ALL_ALERTS.filter(function (x) { return x.id === entry.alertId; })[0];
+    if (!a) { enterApChatMode(entry.title); return; }
+
+    // Build the card header
+    apDvCardHeader.innerHTML = buildAlertCardHtml(a);
+
+    // Populate chat view: system block + stored user messages
+    apChatView.innerHTML = '';
+    apChatView.appendChild(buildAlertSystemBlock(a));
+    (entry.messages || []).forEach(function (m) {
+      var bubble = document.createElement('div');
+      bubble.className = 'ai-bubble-user';
+      bubble.textContent = m;
+      apChatView.appendChild(bubble);
+    });
+
+    panel.classList.remove('ap-history-open');
+    panel.classList.add('ap-chat-open', 'ap-alert-chat');
+    currentChatHistoryEntry = entry;
+
+    setTimeout(function () {
+      apChatView.scrollTop = apChatView.scrollHeight;
+      apChatFootInput.focus({ preventScroll: true });
+    }, 50);
+  }
+
+  // ── Regular chat (from header input or suggestions) ──────────────────
   function enterApChatMode(msg) {
     msg = msg.trim();
     if (!msg) return;
 
-    // Switch to chat view
     panel.classList.add('ap-chat-open');
     apTitleEl.textContent = msg;
     apChatView.innerHTML = '';
-
-    // Clear header input
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
     apChatWrap.classList.remove('has-text');
+    currentChatHistoryEntry = null;
 
-    // User bubble
     var bubble = document.createElement('div');
     bubble.className = 'ai-bubble-user';
     bubble.textContent = msg;
     apChatView.appendChild(bubble);
 
     apAppendResponse(apChatView, msg);
-
-    // Focus the chat footer input
     setTimeout(function () { apChatFootInput.focus({ preventScroll: true }); }, 50);
   }
 
   function closeApChat() {
-    panel.classList.remove('ap-chat-open');
+    panel.classList.remove('ap-chat-open', 'ap-alert-chat');
     apTitleEl.textContent = 'AI Assistant';
     apChatView.innerHTML = '';
+    apDvCardHeader.innerHTML = '';
     apChatInput.value = '';
     apChatInput.style.height = 'auto';
     apChatWrap.classList.remove('has-text');
     apChatFootInput.value = '';
     apChatFootInput.style.height = 'auto';
+    currentChatHistoryEntry = null;
     document.getElementById('ap-suggestions-menu').classList.remove('open');
     apChatInput.focus({ preventScroll: true });
   }
 
-  // Header input submits — only starts a new chat (can't be in chat mode when header input is visible)
+  // Header input — only starts a regular chat
   function apChatSubmit() {
     var msg = apChatInput.value.trim();
     if (!msg) return;
     enterApChatMode(msg);
   }
 
-  // Footer input — continues chat OR starts one from the detail view
+  // Footer input — transitions from detail, continues alert-chat, or continues regular chat
   function apChatFootSubmit() {
     var msg = apChatFootInput.value.trim();
     if (!msg) return;
@@ -6284,76 +6379,40 @@
     apChatFootInput.style.height = 'auto';
 
     if (panel.classList.contains('ap-detail-open')) {
-      // Transition: detail view → chat view
+      // ── Detail → Chat transition ─────────────────────────────────
       var a = ALL_ALERTS.filter(function (x) { return x.id === currentDetailId; })[0];
       var alertTitle = a ? a.title : 'Alert';
 
-      // Pre-populate chat view with the alert content as a system message
       apChatView.innerHTML = '';
-      var sysBlock = document.createElement('div');
-      sysBlock.className = 'ai-response';
-      // Bullets
-      var bulletsDiv = document.createElement('div');
-      bulletsDiv.className = 'ap-dv-bullets';
-      a.description.split(' | ').forEach(function (b) {
-        var item = document.createElement('div');
-        item.className = 'ap-dv-bullet-item';
-        item.innerHTML = '<div class="ap-dv-bullet">' + b.trim() + '</div>' +
-          '<a class="ap-dv-view-ctx" href="#" onclick="return false;">View in Context<span class="material-icons-round mi">open_in_new</span></a>';
-        bulletsDiv.appendChild(item);
-      });
-      sysBlock.appendChild(bulletsDiv);
-      // Actions box
-      var allActions = a.action.split(' | ').map(function (s) { return s.trim(); });
-      var applied = appliedActions[a.id] || [];
-      var actionsHtml = allActions.map(function (act) {
-        var isApplied = applied.indexOf(act) !== -1;
-        return '<li class="ap-dv-action-item' + (isApplied ? ' ap-applied' : '') + '">' +
-          '<span class="material-icons-round ap-action-icon">' + (isApplied ? 'check' : 'fiber_manual_record') + '</span>' +
-          '<span class="ap-action-text">' + act + '</span></li>';
-      }).join('');
-      var allApplied = allActions.length > 0 && allActions.every(function (act) { return applied.indexOf(act) !== -1; });
-      var projHtml = a.projections.map(function (p) {
-        var vc = p.value.charAt(0) === '+' ? ' pos' : (p.value.charAt(0) === '-' ? ' neg' : '');
-        return '<div class="ap-dv-proj-card"><div class="ap-dv-proj-label">' + p.label + '</div>' +
-          '<div class="ap-dv-proj-value' + vc + '">' + p.value + '</div>' +
-          '<div class="ap-dv-proj-sub">' + p.subtitle + '</div></div>';
-      }).join('');
-      var actBox = document.createElement('div');
-      actBox.className = 'ap-dv-actions';
-      actBox.innerHTML = '<div class="ap-dv-actions-label">Recommended Action(s):</div>' +
-        '<ul class="ap-dv-action-list">' + actionsHtml + '</ul>' +
-        '<div class="ap-dv-projections">' + projHtml + '</div>' +
-        (allApplied
-          ? '<div class="ap-dv-all-applied"><span class="material-icons-round mi">check_circle</span>All recommended actions applied</div>'
-          : '<button class="ap-dv-apply-btn"><span class="material-icons-round mi">check</span> Review &amp; Apply</button>');
-      sysBlock.appendChild(actBox);
-      apChatView.appendChild(sysBlock);
+      apChatView.appendChild(buildAlertSystemBlock(a));
 
-      // User bubble
       var bubble = document.createElement('div');
       bubble.className = 'ai-bubble-user';
       bubble.textContent = msg;
       apChatView.appendChild(bubble);
 
-      // Save to history with the alert title (prepend if new)
-      var alreadyInHistory = CHAT_HISTORY.some(function (h) { return h.title === alertTitle; });
-      if (!alreadyInHistory) {
-        CHAT_HISTORY.unshift({ title: alertTitle, time: 'Just now', daysAgo: 0 });
+      // Upsert history entry with alertId and first message
+      var existing = CHAT_HISTORY.filter(function (h) { return h.alertId === a.id; })[0];
+      if (!existing) {
+        existing = { title: alertTitle, time: 'Just now', daysAgo: 0, alertId: a.id, messages: [] };
+        CHAT_HISTORY.unshift(existing);
       }
+      existing.messages.push(msg);
+      currentChatHistoryEntry = existing;
 
-      // Transition state
+      // Transition state — keep the card header that renderDetail already populated
       panel.classList.remove('ap-detail-open');
-      apDvCardHeader.innerHTML = '';
-      panel.classList.add('ap-chat-open');
-      apTitleEl.textContent = alertTitle;
+      panel.classList.add('ap-chat-open', 'ap-alert-chat');
 
       apAppendResponse(apChatView, msg);
       setTimeout(function () { apChatFootInput.focus({ preventScroll: true }); }, 50);
       return;
     }
 
-    // Normal chat continuation
+    // ── Continuing an existing chat ───────────────────────────────
+    if (currentChatHistoryEntry) {
+      currentChatHistoryEntry.messages.push(msg);
+    }
     var bubble = document.createElement('div');
     bubble.className = 'ai-bubble-user';
     bubble.textContent = msg;
@@ -6467,7 +6526,13 @@
           '<div class="ap-history-item-time">' + entry.time + '</div>' +
         '</div>' +
         '<span class="material-icons-round ap-history-item-chevron">chevron_right</span>';
-      item.addEventListener('click', function () { enterApChatMode(entry.title); });
+      item.addEventListener('click', function () {
+        if (entry.alertId) {
+          openAlertChatFromHistory(entry);
+        } else {
+          enterApChatMode(entry.title);
+        }
+      });
       list.appendChild(item);
     });
   }
