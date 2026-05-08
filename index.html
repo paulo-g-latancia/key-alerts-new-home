@@ -619,6 +619,16 @@
       line-height: normal;
       font-family: 'Lato', sans-serif;
     }
+    /* Dot-only variant: no number, just a small circle */
+    .sp-badge.sp-badge--dot {
+      min-width: 10px;
+      width: 10px;
+      height: 10px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 0;
+      top: -4px; right: -4px;
+    }
 
     .columns-label {
       writing-mode: vertical-rl;
@@ -2992,14 +3002,27 @@
   var badge          = document.getElementById('alerts-badge');
 
   /* ── badge ───────────────────────────────────── */
+  // Tier threshold: alerts at this tier or above show a numeric counter;
+  // lower tiers show only a red dot. Will be user-configurable later.
+  var BADGE_COUNTER_MIN_TIER = 5;
+
   function updateBadge() {
-    var count = getActiveAlerts().filter(function (a) {
+    var unread = getActiveAlerts().filter(function (a) {
       return a.status !== 'read' && dismissedIds.indexOf(a.id) === -1;
-    }).length;
-    if (count > 0) {
-      badge.textContent = count;
+    });
+    var counterCount = unread.filter(function (a) { return a.tier >= BADGE_COUNTER_MIN_TIER; }).length;
+    var dotOnly      = counterCount === 0 && unread.length > 0;
+
+    if (counterCount > 0) {
+      badge.textContent = counterCount;
+      badge.classList.remove('sp-badge--dot');
+      badge.style.display = '';
+    } else if (dotOnly) {
+      badge.textContent = '';
+      badge.classList.add('sp-badge--dot');
       badge.style.display = '';
     } else {
+      badge.classList.remove('sp-badge--dot');
       badge.style.display = 'none';
     }
   }
