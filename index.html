@@ -8673,7 +8673,7 @@
   }
 
   var _initDefaults = defaultsForProp(window._ap.getCurrentProperty());
-  var state = { tier: _initDefaults.tier, days: _initDefaults.days, sort: 'urgency', allRegionsExpanded: false, groupByRegion: true, view: 'chart', chartExpanded: {}, chartExpandedRegions: {} };
+  var state = { tier: _initDefaults.tier, days: _initDefaults.days, sort: 'urgency', allRegionsExpanded: false, groupByRegion: true, view: 'bubble', chartExpanded: {}, chartExpandedRegions: {} };
 
   var HOTEL_REGION = {};
   function buildRegionMap() {
@@ -9133,14 +9133,14 @@
     if (single && (state.view === 'chart' || state.view === 'bubble')) state.view = 'table';
     var switcherHTML =
       '<div class="aws-view-switcher">' +
+        '<button class="aws-view-btn' + (!single && state.view === 'bubble' ? ' aws-view-active' : '') + '" id="aws-view-bubble-btn"' + (single ? ' disabled' : ' data-tooltip="Bubble matrix view"') + '>' +
+          '<span class="material-icons-round mi">bubble_chart</span>' +
+        '</button>' +
         '<button class="aws-view-btn' + (!single && state.view === 'chart' ? ' aws-view-active' : '') + '" id="aws-view-chart-btn"' + (single ? ' disabled' : ' data-tooltip="Chart view"') + '>' +
           '<span class="material-icons-round mi">stacked_bar_chart</span>' +
         '</button>' +
         '<button class="aws-view-btn' + (state.view === 'table' ? ' aws-view-active' : '') + '" id="aws-view-table-btn" data-tooltip="Table view">' +
           '<span class="material-icons-round mi">table_chart</span>' +
-        '</button>' +
-        '<button class="aws-view-btn' + (!single && state.view === 'bubble' ? ' aws-view-active' : '') + '" id="aws-view-bubble-btn"' + (single ? ' disabled' : ' data-tooltip="Bubble matrix view"') + '>' +
-          '<span class="material-icons-round mi">bubble_chart</span>' +
         '</button>' +
       '</div>';
 
