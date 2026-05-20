@@ -4533,15 +4533,7 @@
   });
 
   /* ── spark/insight pill clicks in main table ─── */
-  document.getElementById('rates-table').addEventListener('click', function (e) {
-    var pill = e.target.closest('.alert-pill');
-    if (!pill || pill.classList.contains('none')) return;
-    e.stopPropagation(); // prevent the outside-click handler from closing the panel
-    var pillDate = pill.getAttribute('data-pill-date');
-    var alertId  = PILL_ALERT_MAP[pillDate];
-    if (alertId === undefined || alertId === null) return;
-    openPanelToDetail(alertId);
-  });
+  // (rates-table removed — Home page no longer has a rates table)
 
   /* ── back button (detail view) ───────────────── */
   document.getElementById('ap-dv-back-btn').addEventListener('click', function (e) {
