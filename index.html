@@ -2432,11 +2432,6 @@
       padding: 0 10px; position: sticky; left: 0; z-index: 1;
       cursor: pointer; min-width: 160px; height: 60px;
     }
-    /* Crosshair hover — row, column, and focal cell (applied via JS) */
-    .aws-bubble-table tr.aws-bub-row-hl > td,
-    .aws-bubble-table td.aws-bub-col-hl { background: #EFF3F4; }
-    .aws-bubble-table tr.aws-bub-row-hl > .aws-bub-td-label,
-    .aws-bubble-table .aws-bub-td-label.aws-bub-col-hl { background: #E6ECEE; }
     .aws-bubble-table td.aws-bub-cell-hl { background: #D4E4E8; }
     .aws-bub-row-name { display: block; font-size: 13px; font-weight: 700; color: #1C1C1C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .aws-bub-row-sub  { display: block; font-size: 11px; color: #4F5B60; margin-top: 2px; white-space: nowrap; }
@@ -9535,36 +9530,19 @@
       }
     });
 
-    // ── Bubble matrix crosshair hover ────────────────────────
+    // ── Bubble matrix cell hover ─────────────────────────────
     if (bubTbl) {
       var _bubHoveredTd = null;
-      function clearBubCrosshair() {
-        if (!_bubHoveredTd) return;
-        bubTbl.querySelectorAll('.aws-bub-row-hl').forEach(function (r) { r.classList.remove('aws-bub-row-hl'); });
-        bubTbl.querySelectorAll('.aws-bub-col-hl').forEach(function (c) { c.classList.remove('aws-bub-col-hl'); });
-        bubTbl.querySelectorAll('.aws-bub-cell-hl').forEach(function (c) { c.classList.remove('aws-bub-cell-hl'); });
-        _bubHoveredTd = null;
-      }
       bubTbl.addEventListener('mouseover', function (e) {
         var td = e.target.closest('td');
-        if (td === _bubHoveredTd) return; // same cell — nothing to update
-        clearBubCrosshair();
-        if (!td) return;
-        var tr = td.parentNode;
-        if (!tr || tr.tagName !== 'TR') return;
-        _bubHoveredTd = td;
-        // highlight entire row
-        tr.classList.add('aws-bub-row-hl');
-        // highlight entire column (every row, including thead)
-        var colIdx = Array.prototype.indexOf.call(tr.children, td);
-        bubTbl.querySelectorAll('tr').forEach(function (row) {
-          var c = row.children[colIdx];
-          if (c) c.classList.add('aws-bub-col-hl');
-        });
-        // focal cell gets the strongest highlight (overrides row+col via CSS source order)
-        td.classList.add('aws-bub-cell-hl');
+        if (td === _bubHoveredTd) return;
+        if (_bubHoveredTd) _bubHoveredTd.classList.remove('aws-bub-cell-hl');
+        _bubHoveredTd = td || null;
+        if (_bubHoveredTd) _bubHoveredTd.classList.add('aws-bub-cell-hl');
       });
-      bubTbl.addEventListener('mouseleave', clearBubCrosshair);
+      bubTbl.addEventListener('mouseleave', function () {
+        if (_bubHoveredTd) { _bubHoveredTd.classList.remove('aws-bub-cell-hl'); _bubHoveredTd = null; }
+      });
     }
     // ─────────────────────────────────────────────────────────
   }
