@@ -5655,9 +5655,8 @@
     // ── Mini alert card in the panel header ──────────────────────────
     var dow = DAYS[a.date.getDay()];
     var day = MONTHS_SHORT[a.date.getMonth()] + ' ' + a.date.getDate();
-    var statusClass = a.status === 'read' ? 'ap-read' : 'ap-unread';
     apDvCardHeader.innerHTML =
-      '<div class="ap-alert-row ap-dv-header-card ' + statusClass + ' ap-tier-' + a.tier + '">' +
+      '<div class="ap-alert-row ap-dv-header-card ap-unread ap-tier-' + a.tier + '">' +
         '<div class="ap-alert-date">' +
           '<span class="ap-alert-dow">' + dow + '</span>' +
           '<span class="ap-alert-day">' + day + '</span>' +
@@ -6281,8 +6280,7 @@
     var showRegion = (currentProperty === 'cluster-11-50' || currentProperty === 'cluster-51plus');
     var dow = DAYS[a.date.getDay()];
     var day = MONTHS_SHORT[a.date.getMonth()] + ' ' + a.date.getDate();
-    var statusClass = a.status === 'read' ? 'ap-read' : 'ap-unread';
-    return '<div class="ap-alert-row ap-dv-header-card ' + statusClass + ' ap-tier-' + a.tier + '">' +
+    return '<div class="ap-alert-row ap-dv-header-card ap-unread ap-tier-' + a.tier + '">' +
       '<div class="ap-alert-date">' +
         '<span class="ap-alert-dow">' + dow + '</span>' +
         '<span class="ap-alert-day">' + day + '</span>' +
