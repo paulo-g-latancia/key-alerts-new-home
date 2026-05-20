@@ -5471,7 +5471,7 @@
     var filtered = getActiveAlerts().filter(function (a) {
       if (dismissedIds.indexOf(a.id) !== -1) return false;
       if (activeFilters.indexOf(a.category) === -1) return false;
-      if (activeReadFilter === 'unread' && a.status !== 'unread') return false;
+      if (activeReadFilter === 'unread' && a.status === 'read') return false;
       if (activeReadFilter === 'read'   && a.status !== 'read')   return false;
       if (activeRelevanceFilter !== null && a.tier < activeRelevanceFilter) return false;
       if (activeHotelFilter  !== null && activeHotelFilter.indexOf(a.hotel)   === -1) return false;
@@ -5718,7 +5718,7 @@
   function openDetail(id) {
     currentDetailId = id;
     var a = ALL_ALERTS.filter(function (x) { return x.id === id; })[0];
-    if (a && a.status === 'unread') {
+    if (a && a.status !== 'read') {
       a.status = 'read';
       renderAlerts(currentPage);
       updateTablePills([id]);
