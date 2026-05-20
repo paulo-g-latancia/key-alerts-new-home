@@ -2446,6 +2446,13 @@
     .aws-bub-empty-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #DDE1E2; }
     .aws-bub-clickable { cursor: pointer; }
     .aws-bub-td-cell.aws-bub-clickable, .aws-bub-td-label.aws-bub-clickable { cursor: pointer; }
+    /* Bubble matrix: region rows */
+    .aws-bub-region-row td { background: #F0F2F7; }
+    .aws-bub-region-row .aws-bub-td-label { background: #F0F2F7; cursor: pointer; user-select: none; }
+    .aws-bub-region-label-inner { display: flex; align-items: center; gap: 4px; }
+    /* Bubble matrix: hotel sub-rows (indented) */
+    .aws-bub-hotel-sub-row .aws-bub-td-label { background: #fff; }
+    .aws-bub-hotel-sub-name { padding-left: 24px; }
 
     /* Alerts Summary sits directly inside home-content — strip double padding */
     .home-content > .aws-wrap {
@@ -8671,7 +8678,8 @@
   }
 
   var _initDefaults = defaultsForProp(window._ap.getCurrentProperty());
-  var state = { tier: _initDefaults.tier, days: _initDefaults.days, sort: 'urgency', allRegionsExpanded: false, groupByRegion: true, view: 'bubble', chartExpanded: {}, chartExpandedRegions: {} };
+  var state = { tier: _initDefaults.tier, days: _initDefaults.days, sort: 'urgency', allRegionsExpanded: false, groupByRegion: true, view: 'bubble', chartExpanded: {}, chartExpandedRegions: {}, bubbleExpandedRegions: {} };
+  var _prevMultiView = 'bubble'; // restored when leaving single-property mode
 
   var HOTEL_REGION = {};
   function buildRegionMap() {
@@ -9006,8 +9014,11 @@
 
   function renderBubble(allAlerts, matrix, sorted) {
     var single = isSingleProp();
+    var prop   = window._ap.getCurrentProperty();
+    var isRegionGrouped = (prop === 'cluster-51plus') && state.groupByRegion;
 
-    // Find max count across individual rows only (summary excluded) for proportional sizing
+    // ── maxCount for proportional bubble sizing ──────────────────────────
+    // Include region aggregates so region bubbles scale on the same axis
     var maxCount = 1;
     sorted.forEach(function (r) {
       var rk = single ? r.toDateString() : r;
@@ -9016,14 +9027,22 @@
         if (cnt > maxCount) maxCount = cnt;
       });
     });
+    if (isRegionGrouped) {
+      var rDataForMax = computeRegionAggregates(matrix);
+      rDataForMax.regions.forEach(function (region) {
+        CATS.forEach(function (c) {
+          var cnt = rDataForMax.regionCounts[region][c] || 0;
+          if (cnt > maxCount) maxCount = cnt;
+        });
+      });
+    }
 
-    function bubbleHTML(cnt, cat) {
+    function bubbleHTML(cnt) {
       if (cnt === 0) return '<span class="aws-bub-empty-dot"></span>';
       var bg = BUBBLE_COLOR;
       if (cnt === 1) {
         return '<span class="aws-bub-dot" style="width:12px;height:12px;background:' + bg + '"></span>';
       }
-      // Linear scale: min 24px (count=2) → max 44px (count=maxCount)
       var size = (maxCount <= 2) ? 32 : Math.round(24 + (cnt - 2) / (maxCount - 2) * 20);
       size = Math.min(44, Math.max(24, size));
       return '<span class="aws-bub-circle" style="width:' + size + 'px;height:' + size + 'px;background:' + bg + '">' + cnt + '</span>';
@@ -9032,14 +9051,14 @@
     var firstColW = single ? '140px' : '200px';
     var bubTheadHTML =
       '<thead><tr>' +
-        '<th class="aws-bub-th-label" style="width:' + firstColW + '">' + (single ? 'Stay Date' : 'Hotel') + '</th>' +
+        '<th class="aws-bub-th-label" style="width:' + firstColW + '">' + (single ? 'Stay Date' : (isRegionGrouped ? 'Region / Hotel' : 'Hotel')) + '</th>' +
         CATS.map(function (c) { return '<th class="aws-bub-th-cat">' + esc(c) + '</th>'; }).join('') +
         '<th class="aws-bub-th-total">Total</th>' +
       '</tr></thead>';
 
     var summaryLabel = single ? 'All Dates' : 'All Hotels';
     var sumBubCells = CATS.map(function (c) {
-      return '<td class="aws-bub-td-cell">' + bubbleHTML(matrix.summary[c] || 0, c) + '</td>';
+      return '<td class="aws-bub-td-cell">' + bubbleHTML(matrix.summary[c] || 0) + '</td>';
     }).join('');
     var sumTotal = matrix.summaryTotal || 0;
     var summaryBubRow =
@@ -9049,44 +9068,102 @@
         '<td class="aws-bub-td-cell">' + (sumTotal > 0 ? '<strong>' + sumTotal + '</strong>' : '') + '</td>' +
       '</tr>';
 
-    var bubTbodyHTML = '<tbody>';
-    sorted.forEach(function (r) {
-      var rk = single ? r.toDateString() : r;
-      var rowTotal = matrix.rowTotals[rk];
-      if (!rowTotal) return;
-
-      var labelCell;
-      if (single) {
-        var dl = dateLabelFor(r);
-        var wkend = (r.getDay() === 0 || r.getDay() === 6) ? ' aws-weekend' : '';
-        labelCell = '<td class="aws-bub-td-label aws-bub-clickable' + wkend + '" data-row-key="' + esc(rk) + '" data-is-date="1">' +
-          '<div class="aws-label-name">' + esc(dl.main) + '</div>' +
-          '<div class="aws-label-sub">' + esc(dl.sub) + '</div></td>';
-      } else {
-        var region = HOTEL_REGION[r] || '';
-        labelCell = '<td class="aws-bub-td-label aws-bub-clickable" data-row-key="' + esc(rk) + '">' +
-          '<div class="aws-label-name">' + esc(r) + '</div>' +
-          '<div class="aws-label-sub">' + esc(region) + '</div></td>';
-      }
-
-      var contextLabel = single ? dateLabelFor(r).sub : (typeof r === 'string' ? r : '');
-      var catCells = CATS.map(function (c) {
-        var cnt = (matrix.counts[rk] && matrix.counts[rk][c]) || 0;
-        var attrs = ' data-row-key="' + esc(rk) + '" data-cat="' + esc(c) + '"';
+    // ── helper: category cells for a row ─────────────────────────────
+    function makeBubCatCells(rowKey, counts, contextLabel, isDate) {
+      return CATS.map(function (c) {
+        var cnt = (counts && counts[c]) || 0;
+        var attrs = ' data-row-key="' + esc(rowKey) + '" data-cat="' + esc(c) + '"';
         if (cnt > 0) {
-          var best = bestAlertInCell(allAlerts, rk, c, single);
-          var titleSnip = best ? best.title.substring(0, 48) + (best.title.length > 48 ? '\u2026' : '') : '';
-          var ttip = cnt + ' ' + c + ' alert' + (cnt > 1 ? 's' : '') + ' \u2014 ' + contextLabel +
+          var best = (isDate !== undefined) ? bestAlertInCell(allAlerts, rowKey, c, isDate) : null;
+          var titleSnip = best ? best.title.substring(0, 48) + (best.title.length > 48 ? '…' : '') : '';
+          var ttip = cnt + ' ' + c + ' alert' + (cnt > 1 ? 's' : '') + ' — ' + contextLabel +
             (titleSnip ? '\n' + titleSnip : '') + '\nClick to view';
           attrs += ' data-tip="' + esc(ttip) + '"';
         }
         var clickCls = cnt > 0 ? ' aws-bub-clickable' : '';
-        return '<td class="aws-bub-td-cell' + clickCls + '"' + attrs + '>' + bubbleHTML(cnt, c) + '</td>';
+        return '<td class="aws-bub-td-cell' + clickCls + '"' + attrs + '>' + bubbleHTML(cnt) + '</td>';
       }).join('');
-      var totalCell = '<td class="aws-bub-td-cell aws-bub-clickable" data-row-key="' + esc(rk) + '" data-cat="__total__"><strong>' + rowTotal + '</strong></td>';
-      bubTbodyHTML += '<tr>' + labelCell + catCells + totalCell + '</tr>';
-    });
-    bubTbodyHTML += '</tbody>';
+    }
+
+    var bubTbodyHTML = '<tbody>';
+
+    if (isRegionGrouped) {
+      // ── Region-grouped view ───────────────────────────────────────────
+      var rData = computeRegionAggregates(matrix);
+      var sortedRegions = rData.regions.slice();
+      if (state.sort === 'az') {
+        sortedRegions.sort(function (a, b) { return a < b ? -1 : a > b ? 1 : 0; });
+      } else {
+        sortedRegions.sort(function (a, b) { return rData.regionTotals[b] - rData.regionTotals[a]; });
+      }
+
+      sortedRegions.forEach(function (region) {
+        if (rData.regionTotals[region] === 0) return;
+        var expanded = !!state.bubbleExpandedRegions[region];
+        var chevron  = expanded ? 'expand_more' : 'chevron_right';
+        var regionKey = '__region__:' + region;
+
+        var regionLabelCell =
+          '<td class="aws-bub-td-label aws-bub-region-label" data-region="' + esc(region) + '">' +
+            '<div class="aws-bub-region-label-inner">' +
+              '<span class="material-icons-round aws-expand-icon">' + chevron + '</span>' +
+              '<div class="aws-label-name">' + esc(region) + '</div>' +
+            '</div>' +
+          '</td>';
+        var regionCatCells = makeBubCatCells(regionKey, rData.regionCounts[region], region, undefined);
+        var regionTotal = rData.regionTotals[region];
+        var regionTotalCell = '<td class="aws-bub-td-cell aws-bub-clickable" data-row-key="' + esc(regionKey) + '" data-cat="__total__"><strong>' + regionTotal + '</strong></td>';
+        bubTbodyHTML += '<tr class="aws-bub-region-row">' + regionLabelCell + regionCatCells + regionTotalCell + '</tr>';
+
+        if (expanded) {
+          var hotels = rData.regionHotels[region].slice();
+          if (state.sort === 'az') {
+            hotels.sort(function (a, b) { return a < b ? -1 : a > b ? 1 : 0; });
+          } else {
+            hotels.sort(function (a, b) { return (matrix.rowTotals[b] || 0) - (matrix.rowTotals[a] || 0); });
+          }
+          hotels.forEach(function (hotel) {
+            var hotelTotal = matrix.rowTotals[hotel] || 0;
+            if (hotelTotal === 0) return;
+            var hotelLabelCell =
+              '<td class="aws-bub-td-label aws-bub-clickable" data-row-key="' + esc(hotel) + '">' +
+                '<div class="aws-label-name aws-bub-hotel-sub-name">' + esc(hotel) + '</div>' +
+              '</td>';
+            var hotelCatCells = makeBubCatCells(hotel, matrix.counts[hotel], hotel, false);
+            var hotelTotalCell = '<td class="aws-bub-td-cell aws-bub-clickable" data-row-key="' + esc(hotel) + '" data-cat="__total__"><strong>' + hotelTotal + '</strong></td>';
+            bubTbodyHTML += '<tr class="aws-bub-hotel-sub-row">' + hotelLabelCell + hotelCatCells + hotelTotalCell + '</tr>';
+          });
+        }
+      });
+    } else {
+      // ── Flat view ─────────────────────────────────────────────────────────
+      sorted.forEach(function (r) {
+        var rk = single ? r.toDateString() : r;
+        var rowTotal = matrix.rowTotals[rk];
+        if (!rowTotal) return;
+
+        var labelCell;
+        if (single) {
+          var dl = dateLabelFor(r);
+          var wkend = (r.getDay() === 0 || r.getDay() === 6) ? ' aws-weekend' : '';
+          labelCell = '<td class="aws-bub-td-label aws-bub-clickable' + wkend + '" data-row-key="' + esc(rk) + '" data-is-date="1">' +
+            '<div class="aws-label-name">' + esc(dl.main) + '</div>' +
+            '<div class="aws-label-sub">' + esc(dl.sub) + '</div></td>';
+        } else {
+          var region = HOTEL_REGION[r] || '';
+          labelCell = '<td class="aws-bub-td-label aws-bub-clickable" data-row-key="' + esc(rk) + '">' +
+            '<div class="aws-label-name">' + esc(r) + '</div>' +
+            '<div class="aws-label-sub">' + esc(region) + '</div></td>';
+        }
+
+        var contextLabel = single ? dateLabelFor(r).sub : (typeof r === 'string' ? r : '');
+        var catCells = makeBubCatCells(rk, matrix.counts[rk], contextLabel, single);
+        var totalCell = '<td class="aws-bub-td-cell aws-bub-clickable" data-row-key="' + esc(rk) + '" data-cat="__total__"><strong>' + rowTotal + '</strong></td>';
+        bubTbodyHTML += '<tr>' + labelCell + catCells + totalCell + '</tr>';
+      });
+    }
+
+    bubTbodyHTML += summaryBubRow + '</tbody>';
 
     return '<div class="aws-bubble-wrap"><table class="aws-bubble-table">' + bubTheadHTML + bubTbodyHTML + '</table></div>';
   }
@@ -9515,7 +9592,15 @@
     }
     if (bubTbl) bubTbl.addEventListener('click', function (e) {
       e.stopPropagation();
-      // Label cell click
+      // Region label click → toggle expand/collapse
+      var regionLbl = e.target.closest('.aws-bub-region-label');
+      if (regionLbl) {
+        var region = regionLbl.getAttribute('data-region');
+        if (state.bubbleExpandedRegions[region]) { delete state.bubbleExpandedRegions[region]; }
+        else { state.bubbleExpandedRegions[region] = true; }
+        render(); return;
+      }
+      // Hotel label click (flat or expanded sub-row)
       var lbl = e.target.closest('.aws-bub-td-label.aws-bub-clickable');
       if (lbl) {
         openForRow(lbl.getAttribute('data-row-key'), !!lbl.getAttribute('data-is-date')); return;
@@ -9525,6 +9610,11 @@
       if (cell) {
         var rk = cell.getAttribute('data-row-key');
         var cat = cell.getAttribute('data-cat');
+        // Region aggregate cell
+        if (rk && rk.indexOf('__region__:') === 0) {
+          var rname = rk.slice('__region__:'.length);
+          openForRegion(rname, cat); return;
+        }
         if (cat === '__total__') { openForRow(rk, single); return; }
         openForCell(rk, cat, single);
       }
@@ -9585,11 +9675,14 @@
     state.days = d.days;
     state.allRegionsExpanded = false;
     state.groupByRegion = true;
+    state.bubbleExpandedRegions = {};
     if (prop === 'hotel-barcelona') {
-      // Chart and bubble views are not available for single property
-      if (state.view === 'chart' || state.view === 'bubble') state.view = 'table';
+      // Save current multi-prop view so we can restore it on return
+      if (state.view !== 'table') _prevMultiView = state.view;
+      state.view = 'table';
     } else {
-      if (state.view !== 'bubble') state.view = 'chart';
+      // Restore last multi-prop view (bubble by default)
+      state.view = _prevMultiView;
     }
     render();
   };
