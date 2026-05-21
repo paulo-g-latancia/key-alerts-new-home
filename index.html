@@ -8750,6 +8750,7 @@
     var prop = ap.getCurrentProperty();
     var rangeEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + state.days);
     return ap.ALL_ALERTS.filter(function (a) {
+      if (a.status === 'read') return false;
       if (prop === 'hotel-barcelona' && a.hotel !== 'Hotel Barcelona') return false;
       if (prop === 'cluster-2-10'   && ap.CLUSTER_2_10_HOTELS.indexOf(a.hotel) === -1) return false;
       if (prop === 'cluster-11-50'  && ap.CLUSTER_11_50_HOTELS.indexOf(a.hotel) === -1) return false;
