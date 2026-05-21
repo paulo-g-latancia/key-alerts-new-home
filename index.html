@@ -9577,12 +9577,16 @@
     });
 
     var bubTbl = widget.querySelector('.aws-bubble-table');
+    var _bubTipCell = null; // tracks the cell currently showing/waiting for a tip
     if (bubTbl && gTip) {
       bubTbl.addEventListener('mouseover', function (e) {
         var cell = e.target.closest('[data-tip]');
-        if (!cell) { clearTimeout(_tipTimer); gTip.style.display = 'none'; return; }
-        gTip.innerHTML = esc(cell.getAttribute('data-tip')).replace(/\n/g, '<br>');
+        if (cell === _bubTipCell) return; // still on the same cell — leave timer alone
+        _bubTipCell = cell;
         clearTimeout(_tipTimer);
+        gTip.style.display = 'none'; // always hide immediately when changing cells
+        if (!cell) return;
+        gTip.innerHTML = esc(cell.getAttribute('data-tip')).replace(/\n/g, '<br>');
         _tipTimer = setTimeout(function () { gTip.style.display = 'block'; }, 250);
       });
       bubTbl.addEventListener('mousemove', function (e) {
@@ -9592,7 +9596,7 @@
         gTip.style.left = x + 'px';
         gTip.style.top  = y + 'px';
       });
-      bubTbl.addEventListener('mouseleave', function () { clearTimeout(_tipTimer); gTip.style.display = 'none'; });
+      bubTbl.addEventListener('mouseleave', function () { clearTimeout(_tipTimer); gTip.style.display = 'none'; _bubTipCell = null; });
     }
     if (bubTbl) bubTbl.addEventListener('click', function (e) {
       e.stopPropagation();
