@@ -9270,7 +9270,7 @@
 
     var hotelList = getHotelList();
     var propCount = single ? 1 : hotelList.length;
-    var subtitle = (single ? '1 property' : propCount + ' properties') + ' · Next ' + state.days + ' days';
+    var subtitle = 'Next ' + state.days + ' days';
 
     var tierSel = makeSelect('aws-tier-sel', 'aws-sel-tier', [
       {v:'null',l:'All relevance levels'},{v:'2',l:'Relevance level 2+'},{v:'3',l:'Relevance level 3+'},{v:'4',l:'Relevance level 4+'},{v:'5',l:'Relevance level 5'}
