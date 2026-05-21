@@ -4065,7 +4065,7 @@
       </div>
 
       <!-- Today's priority card (fixed) — hidden -->
-      <div class="ap-priority-card" style="display:none">
+      <div class="ap-priority-card">
         <div class="ap-priority-header">
           <span class="material-icons-round ap-priority-icon">calendar_today</span>
           <div class="ap-priority-meta">
@@ -8397,11 +8397,11 @@
         // Show hotel filter button only for cluster views
         var isCluster = currentProperty !== 'hotel-barcelona';
         hotelFilterBtn.style.display = isCluster ? '' : 'none';
-        // Hide Today's priority card for cluster views
+        // Hide Today's priority card for single-property view
         var priorityCardEl = document.querySelector('.ap-priority-card');
         var apContentEl    = document.querySelector('.ap-content');
-        if (priorityCardEl) priorityCardEl.style.display = isCluster ? 'none' : '';
-        if (apContentEl)    apContentEl.style.paddingTop  = isCluster ? '12px' : '';
+        if (priorityCardEl) priorityCardEl.style.display = isCluster ? '' : 'none';
+        if (apContentEl)    apContentEl.style.paddingTop  = isCluster ? '' : '12px';
         // Show/hide cluster-only sort options
         document.querySelectorAll('.ap-sort-cluster-only').forEach(function (el) {
           el.style.display = isCluster ? '' : 'none';
