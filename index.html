@@ -2439,7 +2439,7 @@
     .aws-bub-circle {
       display: inline-flex; align-items: center; justify-content: center;
       border-radius: 50%; color: #fff;
-      font-size: 13px; font-weight: 700; font-family: 'Lato', sans-serif;
+      font-weight: 700; font-family: 'Lato', sans-serif;
     }
     .aws-bub-dot       { display: inline-block; border-radius: 50%; }
     .aws-bub-empty-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #DDE1E2; }
@@ -9049,7 +9049,8 @@
       }
       var size = (maxCount <= 2) ? 32 : Math.round(24 + (cnt - 2) / (maxCount - 2) * 20);
       size = Math.min(44, Math.max(24, size));
-      return '<span class="aws-bub-circle" style="width:' + size + 'px;height:' + size + 'px;background:' + bg + '">' + cnt + '</span>';
+      var fontSize = Math.round(size * 0.40);
+      return '<span class="aws-bub-circle" style="width:' + size + 'px;height:' + size + 'px;background:' + bg + ';font-size:' + fontSize + 'px">' + cnt + '</span>';
     }
 
     var firstColW = single ? '140px' : '200px';
