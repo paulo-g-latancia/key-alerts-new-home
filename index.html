@@ -2411,7 +2411,7 @@
       gap: 16px;
     }
     /* ─── BUBBLE MATRIX VIEW ─────────────────────────── */
-    .aws-bubble-wrap { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; }
+    .aws-bubble-wrap { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; border: 1px solid #DDE1E2; border-radius: 4px; }
     .aws-bubble-table { border-collapse: collapse; font-size: 12px; width: 100%; font-family: 'Lato', sans-serif; }
     .aws-bubble-table thead th {
       font-size: 11px; font-weight: 700; color: #4F5B60;
@@ -9211,11 +9211,11 @@
         '<button class="aws-view-btn' + (!single && state.view === 'bubble' ? ' aws-view-active' : '') + '" id="aws-view-bubble-btn"' + (single ? ' disabled' : ' data-tooltip="Bubble matrix view"') + '>' +
           '<span class="material-icons-round mi">bubble_chart</span>' +
         '</button>' +
-        '<button class="aws-view-btn' + (!single && state.view === 'chart' ? ' aws-view-active' : '') + '" id="aws-view-chart-btn"' + (single ? ' disabled' : ' data-tooltip="Chart view"') + '>' +
-          '<span class="material-icons-round mi">stacked_bar_chart</span>' +
-        '</button>' +
         '<button class="aws-view-btn' + (state.view === 'table' ? ' aws-view-active' : '') + '" id="aws-view-table-btn" data-tooltip="Table view">' +
           '<span class="material-icons-round mi">table_chart</span>' +
+        '</button>' +
+        '<button class="aws-view-btn' + (!single && state.view === 'chart' ? ' aws-view-active' : '') + '" id="aws-view-chart-btn"' + (single ? ' disabled' : ' data-tooltip="Chart view"') + '>' +
+          '<span class="material-icons-round mi">stacked_bar_chart</span>' +
         '</button>' +
       '</div>';
 
