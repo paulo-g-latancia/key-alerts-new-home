@@ -8575,6 +8575,13 @@
       });
       // date range
       activePanelDateFilter = (opts.dateFrom && opts.dateTo) ? { from: opts.dateFrom, to: opts.dateTo } : null;
+      // read filter
+      var rf = opts.readFilter || 'both';
+      activeReadFilter  = rf;
+      pendingReadFilter = rf;
+      document.querySelectorAll('[data-read]').forEach(function (btn) {
+        btn.classList.toggle('ap-seg-active', btn.dataset.read === rf);
+      });
       // render and open
       updateFilterDot();
       currentPage = 1;
@@ -9666,7 +9673,7 @@
 
   function baseOpts() {
     var rangeEnd = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + state.days);
-    return { minTier: state.tier, dateFrom: TODAY, dateTo: rangeEnd, hotel: null, categories: null };
+    return { minTier: state.tier, dateFrom: TODAY, dateTo: rangeEnd, hotel: null, categories: null, readFilter: 'unread' };
   }
 
   function openForCell(rk, cat, isDate) {
