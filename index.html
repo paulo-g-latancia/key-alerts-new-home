@@ -10749,5 +10749,1156 @@
 }());
 </script>
 
+
+<!-- ─── MARKET INSIGHTS WIDGET ─── -->
+<script>
+(function () {
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SHARED CONSTANTS & DATA
+  ══════════════════════════════════════════════════════════════════════ */
+
+  var MI_TODAY = new Date(2026, 3, 17); // April 17 2026
+
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  var SEGMENT_OPTS = [
+    {key:'bar',  label:'BAR',        mult:1.00},
+    {key:'ota',  label:'OTA Rate',   mult:0.92},
+    {key:'corp', label:'Corporate',  mult:0.83},
+    {key:'pkg',  label:'Package',    mult:0.77}
+  ];
+
+  // Multipliers relative to Standard King, matching OB_ROOMS order
+  var ROOM_MULTS = [1.00, 1.18, 1.42, 1.65, 1.08];
+
+  // Hardcoded room types (no onboarding)
+  var OB_ROOMS = [
+    {id:'std-king',    label:'Standard King'},
+    {id:'std-double',  label:'Standard Double'},
+    {id:'deluxe',      label:'Deluxe Room'},
+    {id:'suite',       label:'Suite'},
+    {id:'accessible',  label:'Accessible Room'}
+  ];
+
+  var DEMAND_BARS   = {vlow:1,lowest:1,low:2,normal:3,high:4,highest:5,vhigh:5};
+  var DEMAND_LABELS = {vlow:'Very low demand',lowest:'Very low demand',low:'Low demand',normal:'Normal demand',high:'High demand',highest:'Very high demand',vhigh:'Very high demand'};
+  var PARITY_LABELS = {lowest:'Winning parity',low:'Winning parity',normal:'Mixed parity',high:'Losing parity',highest:'Losing parity',soldout:'Sold out'};
+  var PARITY_ICONS  = {lowest:'thumb_up',low:'thumb_up',normal:'thumbs_up_down',high:'thumb_down',highest:'thumb_down',soldout:''};
+  var DEMAND_W      = {vlow:8,lowest:8,low:25,normal:55,high:78,highest:95,vhigh:95};
+
+  function bars(count){
+    var h='<div class="mi-cell-bar-wrap">';
+    for(var i=0;i<5;i++) h+='<div class="mi-cell-bar-seg'+(i<count?' filled':'')+'"></div>';
+    return h+'</div>';
+  }
+
+  function posBgClass(pc){
+    if(pc===null||pc===undefined) return '';
+    if(pc>=8)  return 'mi-pos-highest';
+    if(pc>=2)  return 'mi-pos-high';
+    if(pc>-2)  return 'mi-pos-normal';
+    if(pc>-8)  return 'mi-pos-low';
+    return 'mi-pos-lowest';
+  }
+
+  var DEM_BG = {vlow:'mi-dem-lowest',lowest:'mi-dem-lowest',low:'mi-dem-low',normal:'mi-dem-normal',high:'mi-dem-high',highest:'mi-dem-highest',vhigh:'mi-dem-highest'};
+  var PAR_BG = {lowest:'mi-par-winning',low:'mi-par-winning',normal:'mi-par-mixed',high:'mi-par-losing',highest:'mi-par-losing'};
+
+  function cellBgClass(data, tab){
+    if(data.lv==='soldout') return 'mi-soldout';
+    if(tab==='positioning') return posBgClass(data.pc);
+    if(tab==='demand')      return DEM_BG[data.td||data.lv]||'mi-dem-normal';
+    if(tab==='parity')      return PAR_BG[data.lv]||'mi-par-mixed';
+    return '';
+  }
+
+  var DOWS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
+
+  function seed(y,m,d,i){ return ((y*31+m)*29+d)*17+i; }
+  function srnd(y,m,d,i,mn,mx){ return mn+Math.abs(seed(y,m,d,i))%(mx-mn+1); }
+
+  /* ── Refresh state (shared) ───────────────────────────────────────────── */
+  var RS = {};
+  var rtipEl = document.getElementById('mi-rtip');
+  var rtipActiveBtn = null;
+
+  function rsKey(y,m,d){ return y+'-'+m+'-'+d; }
+
+  function rsGet(key){
+    if(!RS[key]){
+      RS[key] = { status:'idle', updatedAt: Date.now() - (3600000 + Math.floor(Math.random()*7200000)), availableAt:null };
+    }
+    return RS[key];
+  }
+
+  function rTimeAgo(ts){
+    var s = Math.floor((Date.now()-ts)/1000);
+    if(s<60)   return 'just now';
+    if(s<3600) return Math.floor(s/60)+'m ago';
+    if(s<86400)return Math.floor(s/3600)+'h ago';
+    return Math.floor(s/86400)+'d ago';
+  }
+
+  function rTimeLeft(ts){
+    var s = Math.ceil((ts-Date.now())/1000);
+    if(s<=0) return '0m';
+    if(s<3600) return Math.ceil(s/60)+'m';
+    return Math.floor(s/3600)+'h '+Math.ceil((s%3600)/60)+'m';
+  }
+
+  function rsTipText(s){
+    var ago = rTimeAgo(s.updatedAt);
+    if(s.status==='done')
+      return 'Last updated '+ago+'. Next refresh available in '+rTimeLeft(s.availableAt)+'.';
+    return 'Last updated '+ago+'. Click to refresh data.';
+  }
+
+  function rsTipShort(s){
+    if(s.status==='spinning') return 'Refreshing\u2026';
+    if(s.status==='done') return 'Refreshed';
+    return 'Refresh data';
+  }
+
+  function rsBtnInner(s){
+    if(s.status==='spinning') return '<span class="rs-spinner"></span>';
+    if(s.status==='done')     return '<span class="material-icons-round mi">check_circle</span>';
+    return '<span class="material-icons-round mi">refresh</span>';
+  }
+
+  function rsAttachTip(btn){
+    btn.addEventListener('mouseenter', function(){
+      rtipActiveBtn = this;
+      rtipEl.textContent = rsTipText(rsGet(this.dataset.rskey));
+      rtipEl.style.display = 'block';
+    });
+    btn.addEventListener('mousemove', function(e){
+      rtipEl.style.left = e.clientX+'px';
+      rtipEl.style.top  = e.clientY+'px';
+    });
+    btn.addEventListener('mouseleave', function(){
+      rtipActiveBtn = null; rtipEl.style.display='none';
+    });
+  }
+
+  /* ── Day data (shared) ────────────────────────────────────────────────── */
+  var DD = {};
+  function d(m,day,o){ DD['2026-'+m+'-'+day]=o; }
+
+  var _AWD=[{f:'🇺🇸',c:'USA',p:27},{f:'🇩🇪',c:'GER',p:21},{f:'🇯🇵',c:'JPN',p:16}];
+  var _AWE=[{f:'🇺🇸',c:'USA',p:30},{f:'🇬🇧',c:'GBR',p:20},{f:'🇩🇪',c:'GER',p:18}];
+  var _AHO=[{f:'🇺🇸',c:'USA',p:33},{f:'🇬🇧',c:'GBR',p:21},{f:'🇦🇺',c:'AUS',p:16}];
+  var _MWD=[{f:'🇺🇸',c:'USA',p:28},{f:'🇩🇪',c:'GER',p:20},{f:'🇬🇧',c:'GBR',p:16}];
+  var _MWE=[{f:'🇺🇸',c:'USA',p:31},{f:'🇬🇧',c:'GBR',p:21},{f:'🇩🇪',c:'GER',p:17}];
+  var _MHO=[{f:'🇺🇸',c:'USA',p:36},{f:'🇬🇧',c:'GBR',p:18},{f:'🇨🇦',c:'CAN',p:14}];
+  var _JWD=[{f:'🇺🇸',c:'USA',p:29},{f:'🇨🇦',c:'CAN',p:18},{f:'🇬🇧',c:'GBR',p:15}];
+  var _JWE=[{f:'🇺🇸',c:'USA',p:32},{f:'🇨🇦',c:'CAN',p:20},{f:'🇬🇧',c:'GBR',p:17}];
+  var _JHO=[{f:'🇺🇸',c:'USA',p:38},{f:'🇨🇦',c:'CAN',p:16},{f:'🇲🇽',c:'MEX',p:12}];
+  var _UWD=[{f:'🇺🇸',c:'USA',p:31},{f:'🇨🇦',c:'CAN',p:20},{f:'🇲🇽',c:'MEX',p:14}];
+  var _UWE=[{f:'🇺🇸',c:'USA',p:34},{f:'🇨🇦',c:'CAN',p:22},{f:'🇲🇽',c:'MEX',p:15}];
+  var _UHO=[{f:'🇺🇸',c:'USA',p:42},{f:'🇨🇦',c:'CAN',p:14},{f:'🇲🇽',c:'MEX',p:11}];
+  var _CN='Marriott Downtown';
+
+  // ── April 2026 ──────────────────────────────────────────────────────────
+  d(3,1,  {lv:'low',     pr:199,cp:205,pc:-3, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'1 night', mn:182,md:205,mx:228,yu:199,cn:_CN,cp2:194,cd:-5});
+  d(3,2,  {lv:'normal',  pr:205,cp:208,pc:-1, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'2 nights',mn:185,md:208,mx:230,yu:205,cn:_CN,cp2:200,cd:-5});
+  d(3,3,  {lv:'high',    pr:229,cp:220,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_AWE,los:'3 nights',mn:195,md:220,mx:248,yu:229,cn:_CN,cp2:215,cd:-14});
+  d(3,4,  {lv:'highest', pr:249,cp:230,pc:8,  td:'highest',ld:'highest',bd:'low',    og:_AHO,los:'3 nights',mn:198,md:230,mx:268,yu:249,cn:_CN,cp2:240,cd:-9});
+  d(3,5,  {lv:'high',    pr:245,cp:228,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_AHO,los:'3 nights',mn:196,md:228,mx:262,yu:245,cn:_CN,cp2:235,cd:-10});
+  d(3,6,  {lv:'lowest',  pr:179,cp:195,pc:-8, td:'low',    ld:'low',    bd:'low',    og:_AWD,los:'1 night', mn:160,md:195,mx:218,yu:179,cn:_CN,cp2:188,cd:9});
+  d(3,7,  {lv:'lowest',  pr:175,cp:192,pc:-9, td:'vlow',   ld:'low',    bd:'vlow',   og:_AWD,los:'1 night', mn:158,md:192,mx:215,yu:175,cn:_CN,cp2:186,cd:11});
+  d(3,8,  {lv:'low',     pr:189,cp:198,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'2 nights',mn:168,md:198,mx:222,yu:189,cn:_CN,cp2:191,cd:2});
+  d(3,9,  {lv:'low',     pr:195,cp:200,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:172,md:200,mx:225,yu:195,cn:_CN,cp2:196,cd:1});
+  d(3,10, {lv:'high',    pr:219,cp:210,pc:4,  td:'high',   ld:'high',   bd:'normal', og:_AWE,los:'2 nights',mn:185,md:210,mx:238,yu:219,cn:_CN,cp2:208,cd:-11});
+  d(3,11, {lv:'high',    pr:225,cp:215,pc:5,  td:'high',   ld:'high',   bd:'low',    og:_AWE,los:'2 nights',mn:188,md:215,mx:242,yu:225,cn:_CN,cp2:212,cd:-13});
+  d(3,12, {lv:'low',     pr:199,cp:205,pc:-3, td:'normal', ld:'normal', bd:'low',    og:_AWD,los:'2 nights',mn:178,md:205,mx:228,yu:199,cn:_CN,cp2:198,cd:-1});
+  d(3,13, {lv:'low',     pr:179,cp:190,pc:-6, td:'low',    ld:'low',    bd:'low',    og:_AWD,los:'1 night', mn:162,md:190,mx:215,yu:179,cn:_CN,cp2:185,cd:6});
+  d(3,14, {lv:'low',     pr:189,cp:198,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'1 night', mn:168,md:198,mx:222,yu:189,cn:_CN,cp2:193,cd:4});
+  d(3,15, {lv:'low',     pr:195,cp:200,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:172,md:200,mx:225,yu:195,cn:_CN,cp2:198,cd:3});
+  d(3,16, {lv:'normal',  pr:199,cp:202,pc:-1, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:174,md:202,mx:226,yu:199,cn:_CN,cp2:196,cd:-3});
+  d(3,17, {lv:'high',    pr:219,cp:212,pc:3,  td:'high',   ld:'high',   bd:'normal', og:_AWE,los:'2 nights',mn:186,md:212,mx:238,yu:219,cn:_CN,cp2:210,cd:-9});
+  d(3,18, {lv:'high',    pr:229,cp:218,pc:5,  td:'high',   ld:'high',   bd:'low',    og:_AWE,los:'2 nights',mn:190,md:218,mx:245,yu:229,cn:_CN,cp2:222,cd:-7});
+  d(3,19, {lv:'normal',  pr:205,cp:208,pc:-1, td:'normal', ld:'normal', bd:'low',    og:_AWD,los:'2 nights',mn:180,md:208,mx:232,yu:205,cn:_CN,cp2:202,cd:-3});
+  d(3,20, {lv:'lowest',  pr:178,cp:195,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_AWD,los:'1 night', mn:160,md:195,mx:218,yu:178,cn:_CN,cp2:188,cd:10});
+  d(3,21, {lv:'lowest',  pr:182,cp:197,pc:-8, td:'low',    ld:'low',    bd:'vlow',   og:_AWD,los:'1 night', mn:162,md:197,mx:220,yu:182,cn:_CN,cp2:192,cd:10});
+  d(3,22, {lv:'low',     pr:192,cp:200,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'2 nights',mn:170,md:200,mx:224,yu:192,cn:_CN,cp2:195,cd:3});
+  d(3,23, {lv:'low',     pr:197,cp:202,pc:-2, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:174,md:202,mx:226,yu:197,cn:_CN,cp2:196,cd:-1});
+  d(3,24, {lv:'high',    pr:222,cp:215,pc:3,  td:'high',   ld:'high',   bd:'normal', og:_AWE,los:'2 nights',mn:188,md:215,mx:240,yu:222,cn:_CN,cp2:218,cd:-4});
+  d(3,25, {lv:'high',    pr:228,cp:220,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_AWE,los:'2 nights',mn:192,md:220,mx:248,yu:228,cn:_CN,cp2:222,cd:-6});
+  d(3,26, {lv:'low',     pr:202,cp:207,pc:-2, td:'normal', ld:'normal', bd:'low',    og:_AWD,los:'2 nights',mn:178,md:207,mx:230,yu:202,cn:_CN,cp2:199,cd:-3});
+  d(3,27, {lv:'lowest',  pr:176,cp:193,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_AWD,los:'1 night', mn:158,md:193,mx:218,yu:176,cn:_CN,cp2:186,cd:10});
+  d(3,28, {lv:'low',     pr:189,cp:199,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_AWD,los:'2 nights',mn:168,md:199,mx:224,yu:189,cn:_CN,cp2:193,cd:4});
+  d(3,29, {lv:'low',     pr:194,cp:201,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:172,md:201,mx:226,yu:194,cn:_CN,cp2:196,cd:2});
+  d(3,30, {lv:'low',     pr:198,cp:204,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_AWD,los:'2 nights',mn:174,md:204,mx:228,yu:198,cn:_CN,cp2:198,cd:0});
+
+  // ── May 2026 ────────────────────────────────────────────────────────────
+  d(4,1,  {lv:'high',    pr:218,cp:214,pc:2,  td:'high',   ld:'high',   bd:'normal', og:_MWE,los:'2 nights',mn:188,md:214,mx:240,yu:218,cn:_CN,cp2:212,cd:-6});
+  d(4,2,  {lv:'high',    pr:225,cp:218,pc:3,  td:'high',   ld:'high',   bd:'low',    og:_MWE,los:'2 nights',mn:192,md:218,mx:245,yu:225,cn:_CN,cp2:218,cd:-7});
+  d(4,3,  {lv:'low',     pr:200,cp:206,pc:-3, td:'normal', ld:'normal', bd:'low',    og:_MWD,los:'2 nights',mn:178,md:206,mx:230,yu:200,cn:_CN,cp2:198,cd:-2});
+  d(4,4,  {lv:'lowest',  pr:176,cp:194,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_MWD,los:'1 night', mn:158,md:194,mx:218,yu:176,cn:_CN,cp2:186,cd:10});
+  d(4,5,  {lv:'lowest',  pr:181,cp:196,pc:-8, td:'low',    ld:'low',    bd:'low',    og:_MWD,los:'1 night', mn:160,md:196,mx:220,yu:181,cn:_CN,cp2:190,cd:9});
+  d(4,6,  {lv:'low',     pr:191,cp:200,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'1 night', mn:168,md:200,mx:224,yu:191,cn:_CN,cp2:193,cd:2});
+  d(4,7,  {lv:'low',     pr:196,cp:203,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_MWD,los:'2 nights',mn:174,md:203,mx:228,yu:196,cn:_CN,cp2:196,cd:0});
+  d(4,8,  {lv:'high',    pr:220,cp:213,pc:3,  td:'high',   ld:'high',   bd:'normal', og:_MWE,los:'2 nights',mn:186,md:213,mx:240,yu:220,cn:_CN,cp2:212,cd:-8});
+  d(4,9,  {lv:'highest', pr:248,cp:228,pc:9,  td:'highest',ld:'highest',bd:'low',    og:_MHO,los:'3 nights',mn:198,md:228,mx:268,yu:248,cn:_CN,cp2:240,cd:-8});
+  d(4,10, {lv:'high',    pr:235,cp:222,pc:6,  td:'highest',ld:'highest',bd:'low',    og:_MHO,los:'3 nights',mn:195,md:222,mx:258,yu:235,cn:_CN,cp2:228,cd:-7});
+  d(4,11, {lv:'lowest',  pr:178,cp:195,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_MWD,los:'1 night', mn:160,md:195,mx:218,yu:178,cn:_CN,cp2:188,cd:10});
+  d(4,12, {lv:'lowest',  pr:181,cp:197,pc:-8, td:'low',    ld:'low',    bd:'vlow',   og:_MWD,los:'1 night', mn:162,md:197,mx:220,yu:181,cn:_CN,cp2:190,cd:9});
+  d(4,13, {lv:'low',     pr:192,cp:201,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'1 night', mn:170,md:201,mx:225,yu:192,cn:_CN,cp2:194,cd:2});
+  d(4,14, {lv:'low',     pr:198,cp:204,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_MWD,los:'2 nights',mn:175,md:204,mx:228,yu:198,cn:_CN,cp2:198,cd:0});
+  d(4,15, {lv:'high',    pr:218,cp:212,pc:3,  td:'high',   ld:'high',   bd:'normal', og:_MWE,los:'2 nights',mn:186,md:212,mx:240,yu:218,cn:_CN,cp2:212,cd:-6});
+  d(4,16, {lv:'high',    pr:226,cp:219,pc:3,  td:'high',   ld:'high',   bd:'low',    og:_MWE,los:'2 nights',mn:192,md:219,mx:246,yu:226,cn:_CN,cp2:220,cd:-6});
+  d(4,17, {lv:'low',     pr:202,cp:208,pc:-3, td:'normal', ld:'normal', bd:'low',    og:_MWD,los:'2 nights',mn:180,md:208,mx:232,yu:202,cn:_CN,cp2:200,cd:-2});
+  d(4,18, {lv:'lowest',  pr:177,cp:194,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_MWD,los:'1 night', mn:158,md:194,mx:218,yu:177,cn:_CN,cp2:186,cd:9});
+  d(4,19, {lv:'low',     pr:188,cp:199,pc:-6, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'1 night', mn:166,md:199,mx:224,yu:188,cn:_CN,cp2:192,cd:4});
+  d(4,20, {lv:'low',     pr:193,cp:202,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'2 nights',mn:172,md:202,mx:226,yu:193,cn:_CN,cp2:196,cd:3});
+  d(4,21, {lv:'low',     pr:199,cp:205,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_MWD,los:'2 nights',mn:176,md:205,mx:230,yu:199,cn:_CN,cp2:198,cd:-1});
+  d(4,22, {lv:'high',    pr:255,cp:238,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_MHO,los:'3 nights',mn:205,md:238,mx:275,yu:255,cn:_CN,cp2:248,cd:-7});
+  d(4,23, {lv:'highest', pr:265,cp:242,pc:9,  td:'highest',ld:'highest',bd:'low',    og:_MHO,los:'4 nights',mn:210,md:242,mx:282,yu:265,cn:_CN,cp2:255,cd:-10});
+  d(4,24, {lv:'highest', pr:260,cp:240,pc:8,  td:'highest',ld:'highest',bd:'low',    og:_MHO,los:'3 nights',mn:208,md:240,mx:278,yu:260,cn:_CN,cp2:252,cd:-8});
+  d(4,25, {lv:'high',    pr:238,cp:228,pc:4,  td:'high',   ld:'highest',bd:'low',    og:_MHO,los:'2 nights',mn:198,md:228,mx:260,yu:238,cn:_CN,cp2:232,cd:-6});
+  d(4,26, {lv:'low',     pr:195,cp:203,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'2 nights',mn:174,md:203,mx:228,yu:195,cn:_CN,cp2:196,cd:1});
+  d(4,27, {lv:'low',     pr:191,cp:201,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_MWD,los:'1 night', mn:170,md:201,mx:226,yu:191,cn:_CN,cp2:193,cd:2});
+  d(4,28, {lv:'low',     pr:197,cp:204,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_MWD,los:'2 nights',mn:175,md:204,mx:228,yu:197,cn:_CN,cp2:198,cd:1});
+  d(4,29, {lv:'high',    pr:222,cp:216,pc:3,  td:'high',   ld:'high',   bd:'normal', og:_MWE,los:'2 nights',mn:188,md:216,mx:242,yu:222,cn:_CN,cp2:216,cd:-6});
+  d(4,30, {lv:'high',    pr:229,cp:221,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_MWE,los:'2 nights',mn:194,md:221,mx:248,yu:229,cn:_CN,cp2:222,cd:-7});
+  d(4,31, {lv:'low',     pr:204,cp:209,pc:-2, td:'normal', ld:'normal', bd:'low',    og:_MWD,los:'2 nights',mn:182,md:209,mx:234,yu:204,cn:_CN,cp2:200,cd:-4});
+
+  // ── June 2026 ───────────────────────────────────────────────────────────
+  d(5,1,  {lv:'lowest',  pr:180,cp:198,pc:-9, td:'low',    ld:'low',    bd:'low',    og:_JWD,los:'1 night', mn:162,md:198,mx:222,yu:180,cn:_CN,cp2:190,cd:10});
+  d(5,2,  {lv:'low',     pr:192,cp:204,pc:-6, td:'normal', ld:'low',    bd:'normal', og:_JWD,los:'1 night', mn:172,md:204,mx:228,yu:192,cn:_CN,cp2:196,cd:4});
+  d(5,3,  {lv:'low',     pr:198,cp:207,pc:-4, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:178,md:207,mx:232,yu:198,cn:_CN,cp2:200,cd:2});
+  d(5,4,  {lv:'low',     pr:205,cp:210,pc:-2, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:182,md:210,mx:236,yu:205,cn:_CN,cp2:204,cd:-1});
+  d(5,5,  {lv:'high',    pr:232,cp:222,pc:5,  td:'high',   ld:'high',   bd:'normal', og:_JWE,los:'2 nights',mn:192,md:222,mx:250,yu:232,cn:_CN,cp2:225,cd:-7});
+  d(5,6,  {lv:'high',    pr:248,cp:232,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_JWE,los:'3 nights',mn:200,md:232,mx:268,yu:248,cn:_CN,cp2:242,cd:-6});
+  d(5,7,  {lv:'high',    pr:225,cp:218,pc:3,  td:'high',   ld:'high',   bd:'low',    og:_JWE,los:'2 nights',mn:190,md:218,mx:245,yu:225,cn:_CN,cp2:220,cd:-5});
+  d(5,8,  {lv:'low',     pr:195,cp:206,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_JWD,los:'2 nights',mn:176,md:206,mx:230,yu:195,cn:_CN,cp2:198,cd:3});
+  d(5,9,  {lv:'low',     pr:198,cp:208,pc:-5, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:178,md:208,mx:232,yu:198,cn:_CN,cp2:200,cd:2});
+  d(5,10, {lv:'low',     pr:202,cp:210,pc:-4, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:180,md:210,mx:235,yu:202,cn:_CN,cp2:204,cd:2});
+  d(5,11, {lv:'high',    pr:218,cp:212,pc:3,  td:'high',   ld:'normal', bd:'high',   og:_JWD,los:'2 nights',mn:184,md:212,mx:238,yu:218,cn:_CN,cp2:212,cd:-6});
+  d(5,12, {lv:'high',    pr:238,cp:226,pc:5,  td:'high',   ld:'high',   bd:'normal', og:_JWE,los:'2 nights',mn:195,md:226,mx:255,yu:238,cn:_CN,cp2:230,cd:-8});
+  d(5,13, {lv:'high',    pr:252,cp:235,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_JWE,los:'3 nights',mn:202,md:235,mx:272,yu:252,cn:_CN,cp2:245,cd:-7});
+  d(5,14, {lv:'high',    pr:229,cp:220,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_JWE,los:'2 nights',mn:192,md:220,mx:248,yu:229,cn:_CN,cp2:224,cd:-5});
+  d(5,15, {lv:'low',     pr:198,cp:208,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_JWD,los:'2 nights',mn:178,md:208,mx:232,yu:198,cn:_CN,cp2:202,cd:4});
+  d(5,16, {lv:'low',     pr:201,cp:210,pc:-4, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:180,md:210,mx:235,yu:201,cn:_CN,cp2:204,cd:3});
+  d(5,17, {lv:'low',     pr:205,cp:212,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:182,md:212,mx:238,yu:205,cn:_CN,cp2:206,cd:1});
+  d(5,18, {lv:'high',    pr:222,cp:215,pc:3,  td:'high',   ld:'normal', bd:'high',   og:_JWD,los:'2 nights',mn:186,md:215,mx:242,yu:222,cn:_CN,cp2:215,cd:-7});
+  d(5,19, {lv:'highest', pr:258,cp:240,pc:8,  td:'highest',ld:'highest',bd:'normal', og:_JHO,los:'3 nights',mn:208,md:240,mx:278,yu:258,cn:_CN,cp2:250,cd:-8});
+  d(5,20, {lv:'high',    pr:262,cp:244,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_JHO,los:'3 nights',mn:212,md:244,mx:282,yu:262,cn:_CN,cp2:254,cd:-8});
+  d(5,21, {lv:'high',    pr:238,cp:228,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_JWE,los:'2 nights',mn:198,md:228,mx:258,yu:238,cn:_CN,cp2:232,cd:-6});
+  d(5,22, {lv:'low',     pr:200,cp:210,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_JWD,los:'2 nights',mn:180,md:210,mx:236,yu:200,cn:_CN,cp2:202,cd:2});
+  d(5,23, {lv:'low',     pr:203,cp:212,pc:-4, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:182,md:212,mx:238,yu:203,cn:_CN,cp2:206,cd:3});
+  d(5,24, {lv:'low',     pr:208,cp:214,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:184,md:214,mx:240,yu:208,cn:_CN,cp2:208,cd:0});
+  d(5,25, {lv:'high',    pr:225,cp:218,pc:3,  td:'high',   ld:'normal', bd:'high',   og:_JWD,los:'2 nights',mn:188,md:218,mx:244,yu:225,cn:_CN,cp2:218,cd:-7});
+  d(5,26, {lv:'high',    pr:242,cp:230,pc:5,  td:'high',   ld:'high',   bd:'normal', og:_JWE,los:'2 nights',mn:198,md:230,mx:260,yu:242,cn:_CN,cp2:235,cd:-7});
+  d(5,27, {lv:'high',    pr:255,cp:238,pc:7,  td:'highest',ld:'highest',bd:'low',    og:_JWE,los:'3 nights',mn:205,md:238,mx:275,yu:255,cn:_CN,cp2:248,cd:-7});
+  d(5,28, {lv:'high',    pr:232,cp:222,pc:5,  td:'high',   ld:'high',   bd:'low',    og:_JWE,los:'2 nights',mn:192,md:222,mx:250,yu:232,cn:_CN,cp2:228,cd:-4});
+  d(5,29, {lv:'low',     pr:202,cp:212,pc:-5, td:'normal', ld:'low',    bd:'normal', og:_JWD,los:'2 nights',mn:182,md:212,mx:238,yu:202,cn:_CN,cp2:205,cd:3});
+  d(5,30, {lv:'low',     pr:205,cp:214,pc:-4, td:'normal', ld:'normal', bd:'normal', og:_JWD,los:'2 nights',mn:184,md:214,mx:240,yu:205,cn:_CN,cp2:208,cd:3});
+
+  // ── July 2026 ───────────────────────────────────────────────────────────
+  d(6,1,  {lv:'low',     pr:210,cp:216,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:186,md:216,mx:242,yu:210,cn:_CN,cp2:210,cd:0});
+  d(6,2,  {lv:'high',    pr:235,cp:225,pc:4,  td:'high',   ld:'high',   bd:'normal', og:_UWE,los:'2 nights',mn:195,md:225,mx:252,yu:235,cn:_CN,cp2:228,cd:-7});
+  d(6,3,  {lv:'highest', pr:289,cp:258,pc:12, td:'highest',ld:'highest',bd:'low',    og:_UHO,los:'4 nights',mn:225,md:258,mx:305,yu:289,cn:_CN,cp2:278,cd:-11});
+  d(6,4,  {lv:'soldout', pr:null,cp:null,pc:null,td:null,  ld:null,     bd:null,     og:[],  los:null,      mn:null,md:null,mx:null,yu:null,cn:null,cp2:null,cd:null});
+  d(6,5,  {lv:'highest', pr:275,cp:252,pc:9,  td:'highest',ld:'highest',bd:'low',    og:_UHO,los:'3 nights',mn:218,md:252,mx:292,yu:275,cn:_CN,cp2:268,cd:-7});
+  d(6,6,  {lv:'high',    pr:242,cp:232,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_UHO,los:'2 nights',mn:200,md:232,mx:262,yu:242,cn:_CN,cp2:238,cd:-4});
+  d(6,7,  {lv:'low',     pr:208,cp:215,pc:-3, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:185,md:215,mx:242,yu:208,cn:_CN,cp2:208,cd:0});
+  d(6,8,  {lv:'low',     pr:212,cp:218,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:188,md:218,mx:244,yu:212,cn:_CN,cp2:210,cd:-2});
+  d(6,9,  {lv:'low',     pr:215,cp:219,pc:-2, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:190,md:219,mx:246,yu:215,cn:_CN,cp2:212,cd:-3});
+  d(6,10, {lv:'high',    pr:245,cp:234,pc:5,  td:'high',   ld:'high',   bd:'normal', og:_UWE,los:'2 nights',mn:202,md:234,mx:264,yu:245,cn:_CN,cp2:238,cd:-7});
+  d(6,11, {lv:'highest', pr:258,cp:240,pc:8,  td:'highest',ld:'highest',bd:'low',    og:_UWE,los:'3 nights',mn:208,md:240,mx:276,yu:258,cn:_CN,cp2:252,cd:-6});
+  d(6,12, {lv:'high',    pr:238,cp:228,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_UWE,los:'2 nights',mn:198,md:228,mx:258,yu:238,cn:_CN,cp2:232,cd:-6});
+  d(6,13, {lv:'low',     pr:205,cp:214,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:184,md:214,mx:240,yu:205,cn:_CN,cp2:206,cd:1});
+  d(6,14, {lv:'low',     pr:208,cp:216,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:186,md:216,mx:242,yu:208,cn:_CN,cp2:208,cd:0});
+  d(6,15, {lv:'low',     pr:212,cp:218,pc:-3, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:188,md:218,mx:244,yu:212,cn:_CN,cp2:210,cd:-2});
+  d(6,16, {lv:'high',    pr:228,cp:220,pc:4,  td:'high',   ld:'normal', bd:'high',   og:_UWD,los:'2 nights',mn:190,md:220,mx:248,yu:228,cn:_CN,cp2:222,cd:-6});
+  d(6,17, {lv:'high',    pr:260,cp:242,pc:7,  td:'highest',ld:'highest',bd:'normal', og:_UWE,los:'3 nights',mn:210,md:242,mx:278,yu:260,cn:_CN,cp2:252,cd:-8});
+  d(6,18, {lv:'highest', pr:265,cp:245,pc:8,  td:'highest',ld:'highest',bd:'low',    og:_UWE,los:'3 nights',mn:212,md:245,mx:282,yu:265,cn:_CN,cp2:258,cd:-7});
+  d(6,19, {lv:'high',    pr:240,cp:230,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_UWE,los:'2 nights',mn:200,md:230,mx:260,yu:240,cn:_CN,cp2:235,cd:-5});
+  d(6,20, {lv:'low',     pr:208,cp:216,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:186,md:216,mx:242,yu:208,cn:_CN,cp2:208,cd:0});
+  d(6,21, {lv:'low',     pr:210,cp:217,pc:-3, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:187,md:217,mx:244,yu:210,cn:_CN,cp2:210,cd:0});
+  d(6,22, {lv:'low',     pr:215,cp:220,pc:-2, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:190,md:220,mx:246,yu:215,cn:_CN,cp2:212,cd:-3});
+  d(6,23, {lv:'high',    pr:232,cp:222,pc:5,  td:'high',   ld:'normal', bd:'high',   og:_UWD,los:'2 nights',mn:192,md:222,mx:250,yu:232,cn:_CN,cp2:225,cd:-7});
+  d(6,24, {lv:'high',    pr:262,cp:244,pc:7,  td:'highest',ld:'highest',bd:'normal', og:_UWE,los:'3 nights',mn:212,md:244,mx:280,yu:262,cn:_CN,cp2:255,cd:-7});
+  d(6,25, {lv:'highest', pr:268,cp:248,pc:8,  td:'highest',ld:'highest',bd:'low',    og:_UWE,los:'3 nights',mn:215,md:248,mx:285,yu:268,cn:_CN,cp2:260,cd:-8});
+  d(6,26, {lv:'high',    pr:242,cp:232,pc:4,  td:'high',   ld:'high',   bd:'low',    og:_UWE,los:'2 nights',mn:202,md:232,mx:262,yu:242,cn:_CN,cp2:238,cd:-4});
+  d(6,27, {lv:'low',     pr:210,cp:218,pc:-4, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:188,md:218,mx:244,yu:210,cn:_CN,cp2:210,cd:0});
+  d(6,28, {lv:'low',     pr:212,cp:219,pc:-3, td:'normal', ld:'low',    bd:'normal', og:_UWD,los:'2 nights',mn:189,md:219,mx:245,yu:212,cn:_CN,cp2:212,cd:0});
+  d(6,29, {lv:'low',     pr:218,cp:222,pc:-2, td:'normal', ld:'normal', bd:'normal', og:_UWD,los:'2 nights',mn:192,md:222,mx:248,yu:218,cn:_CN,cp2:215,cd:-3});
+  d(6,30, {lv:'high',    pr:235,cp:226,pc:4,  td:'high',   ld:'normal', bd:'high',   og:_UWD,los:'2 nights',mn:196,md:226,mx:255,yu:235,cn:_CN,cp2:228,cd:-7});
+  d(6,31, {lv:'highest', pr:265,cp:246,pc:8,  td:'highest',ld:'highest',bd:'normal', og:_UWE,los:'3 nights',mn:214,md:246,mx:282,yu:265,cn:_CN,cp2:258,cd:-7});
+
+  var DEFAULT = {lv:'normal',pr:201,cp:225,pc:0,td:'normal',ld:'normal',bd:'normal',og:[{f:'🇺🇸',c:'USA',p:27},{f:'🇩🇪',c:'GER',p:22},{f:'🇯🇵',c:'JPN',p:17}],los:'2 nights',mn:175,md:200,mx:215,yu:201,cn:'Marriott Downtown',cp2:195,cd:-6};
+
+  function getData(y,m,day){ return DD[y+'-'+m+'-'+day] || DEFAULT; }
+
+  /* ── cellContent (shared) ─────────────────────────────────────────────── */
+  function cellContent(data, tab, cy, cm, cd){
+    if(data.lv==='soldout') return '<div class="mi-cell-content"><div class="mi-cell-price">\u2014</div><div class="mi-cell-comp">vs $'+data.cp+'</div></div>';
+    if(tab==='positioning'){
+      var cls = data.pc>0?'pos':(data.pc<0?'neg':'zero');
+      var str = data.pc>0?'+'+data.pc+'%':(data.pc<0?data.pc+'%':'0%');
+      var refHtml = '';
+      if(cy!==undefined){
+        var rk = rsKey(cy,cm,cd); var rs = rsGet(rk);
+        var btnCls = 'mi-cell-ref-btn'+(rs.status==='done'?' rs-done':'');
+        refHtml = '<button class="'+btnCls+'" data-rskey="'+rk+'">'+rsBtnInner(rs)+'<span class="mi-tooltip">'+rsTipShort(rs)+'</span></button>';
+      }
+      return '<div class="mi-cell-content"><div class="mi-cell-price">$'+data.pr+'</div><div class="mi-cell-comp">vs $'+data.cp+'</div><div class="mi-cell-pct '+cls+'">'+str+'</div></div>'+refHtml;
+    }
+    if(tab==='demand'){
+      var dlv = data.td||data.lv;
+      return '<div class="mi-cell-content"><div class="mi-cell-price">$'+data.pr+'</div><div class="mi-cell-demand-label">'+(DEMAND_LABELS[dlv]||'Normal demand')+'</div>'+bars(DEMAND_BARS[dlv]||3)+'</div>';
+    }
+    if(tab==='parity'){
+      var icon = PARITY_ICONS[data.lv]||'compare_arrows';
+      return '<div class="mi-cell-content"><div class="mi-cell-price">$'+data.pr+'</div><div class="mi-cell-parity-label">'+(PARITY_LABELS[data.lv]||'Mixed parity')+'</div><div class="mi-cell-parity-icon"><span class="material-icons-round mi">'+icon+'</span></div></div>';
+    }
+    return '';
+  }
+
+  /* ── Per-property configs ─────────────────────────────────────────────── */
+  var PROP_CFGS = {
+    si: {
+      mult: 1.0,
+      comps: [
+        {n:'Marriott Downtown', offsets:[-9,-12,-8,-15,-10]},
+        {n:'Hilton Central',    offsets:[8,6,10,7,9]},
+        {n:'Hyatt Regency',     offsets:[-30,-25,-28,-32,-27]},
+        {n:'IHG Plaza',         offsets:[18,14,20,16,12]}
+      ],
+      compReviews: [
+        {n:'Marriott Downtown', base:8.4, trend:'up'},
+        {n:'Hilton Central',    base:8.7, trend:'down'},
+        {n:'Hyatt Regency',     base:9.0, trend:'up'},
+        {n:'IHG Plaza',         base:7.3, trend:'up'}
+      ]
+    },
+    c2: {
+      mult: 1.35,
+      comps: [
+        {n:'Marriott Portfolio', offsets:[-14,-18,-11,-20,-15]},
+        {n:'Hilton Collection',  offsets:[10,8,13,9,12]},
+        {n:'Hyatt Portfolio',    offsets:[-24,-19,-27,-22,-25]},
+        {n:'Accor Hotels',       offsets:[22,16,26,19,14]}
+      ],
+      compReviews: [
+        {n:'Marriott Portfolio', base:8.2, trend:'up'},
+        {n:'Hilton Collection',  base:8.5, trend:'up'},
+        {n:'Hyatt Portfolio',    base:8.9, trend:'down'},
+        {n:'Accor Hotels',       base:7.8, trend:'up'}
+      ]
+    },
+    c11: {
+      mult: 1.82,
+      comps: [
+        {n:'Marriott Bonvoy Hotels', offsets:[-20,-26,-17,-29,-22]},
+        {n:'Hilton Worldwide',       offsets:[13,10,16,12,15]},
+        {n:'Hyatt Global',           offsets:[-16,-13,-19,-15,-21]},
+        {n:'IHG Enterprise',         offsets:[30,24,35,27,21]}
+      ],
+      compReviews: [
+        {n:'Marriott Bonvoy Hotels', base:8.3, trend:'up'},
+        {n:'Hilton Worldwide',       base:8.6, trend:'up'},
+        {n:'Hyatt Global',           base:9.1, trend:'up'},
+        {n:'IHG Enterprise',         base:7.9, trend:'down'}
+      ]
+    }
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════
+     FACTORY FUNCTION
+  ══════════════════════════════════════════════════════════════════════ */
+
+  var instances = {};
+
+  function createMI(scopeId, propCfg) {
+    var sc = document.getElementById(scopeId);
+    if (!sc) return null;
+
+    /* ── Per-instance mutable copies of comp data ───────────────────── */
+    var COMPS        = propCfg.comps.map(function(c){ return {n:c.n, offsets:c.offsets.slice()}; });
+    var COMP_REVIEWS = propCfg.compReviews.map(function(r){ return {n:r.n, base:r.base, trend:r.trend}; });
+
+    /* ── Per-instance state ─────────────────────────────────────────── */
+    var viewYear       = MI_TODAY.getFullYear();
+    var viewMonth      = MI_TODAY.getMonth();
+    var activeTab      = 'positioning';
+    var selectedComp   = null;
+    var activeSegment  = 'bar';
+    var activeRoomType = 0;
+    var selDate        = null;
+
+    /* ── DOM references via data-mi attributes ──────────────────────── */
+    var calGrid    = sc.querySelector('[data-mi="cal-grid"]');
+    var detailEl   = sc.querySelector('[data-mi="detail"]');
+    var monthLabel = sc.querySelector('[data-mi="month-label"]');
+    var prevBtn    = sc.querySelector('[data-mi="prev-btn"]');
+    var nextBtn    = sc.querySelector('[data-mi="next-btn"]');
+    var todayBtn   = sc.querySelector('[data-mi="today-btn"]');
+    var tabs       = sc.querySelectorAll('.mi-tab');
+
+    /* ── applyDisplayFilters (inside factory, closes over instance state) */
+    function applyDisplayFilters(data){
+      if(data.lv==='soldout') return data;
+      var sm = (SEGMENT_OPTS.filter(function(s){ return s.key===activeSegment; })[0]||SEGMENT_OPTS[0]).mult;
+      var rm = ROOM_MULTS[activeRoomType] || 1;
+      var base = propCfg.mult || 1;
+      var m  = sm * rm * base;
+      function scl(v){ return v==null?v:Math.round(v*m/5)*5; }
+      return {pr:scl(data.pr),cp:scl(data.cp),pc:data.pc,md:scl(data.md),mn:scl(data.mn),
+              mx:scl(data.mx),yu:scl(data.yu),lv:data.lv,td:data.td,ld:data.ld,bd:data.bd,
+              og:data.og,los:data.los};
+    }
+
+    function getCompPrice(compIdx, data, y, m, day){
+      var c = COMPS[compIdx];
+      var baseOff = c.offsets[Math.abs(seed(y,m,day,compIdx))%c.offsets.length];
+      return data.md + baseOff;
+    }
+
+    function getEffectiveData(data, y, m, day){
+      var base = applyDisplayFilters(data);
+      if(selectedComp===null || base.lv==='soldout') return base;
+      var soldout = (seed(y,m,day,selectedComp+20)%8===0);
+      if(soldout) return base;
+      var compPrice = getCompPrice(selectedComp, base, y, m, day);
+      var pct = Math.round((base.pr - compPrice) / compPrice * 100);
+      return {pr:base.pr, cp:compPrice, pc:pct, md:base.md, mn:base.mn, mx:base.mx,
+              yu:base.yu, lv:base.lv, td:base.td, ld:base.ld, bd:base.bd, og:base.og, los:base.los};
+    }
+
+    /* ── rsStartRefresh (instance-scoped) ───────────────────────────── */
+    function rsStartRefresh(key){
+      var s = rsGet(key);
+      if(s.status!=='idle') return;
+      s.status='spinning';
+      renderCal();
+      if(selDate && rsKey(selDate.getFullYear(),selDate.getMonth(),selDate.getDate())===key) renderDetail();
+      var delay = 4000 + Math.random()*2000;
+      setTimeout(function(){
+        s.status='done'; s.updatedAt=Date.now(); s.availableAt=Date.now()+4*3600*1000;
+        var kparts = key.split('-');
+        var ky=parseInt(kparts[0]), km=parseInt(kparts[1]), kd=parseInt(kparts[2]);
+        var dk = ky+'-'+km+'-'+kd;
+        if(DD[dk] && DD[dk].lv!=='soldout'){
+          var delta = (Math.random()>0.5?1:-1)*(Math.floor(Math.random()*3)+1)*5;
+          DD[dk].cp = Math.max(DD[dk].cp + delta, 100);
+          DD[dk].pc = Math.round((DD[dk].pr - DD[dk].cp) / DD[dk].cp * 100);
+        }
+        renderCal();
+        if(selDate && rsKey(selDate.getFullYear(),selDate.getMonth(),selDate.getDate())===key) renderDetail();
+        var flashCell = calGrid.querySelector('[data-y="'+ky+'"][data-m="'+km+'"][data-d="'+kd+'"]');
+        if(flashCell){
+          flashCell.classList.add('mi-flash');
+          flashCell.addEventListener('animationend', function(){ flashCell.classList.remove('mi-flash'); },{once:true});
+        }
+        setTimeout(function(){
+          if(RS[key]) RS[key].status='idle';
+          renderCal();
+          if(selDate && rsKey(selDate.getFullYear(),selDate.getMonth(),selDate.getDate())===key) renderDetail();
+        }, 4*3600*1000);
+      }, delay);
+    }
+
+    /* ── Calendar renderer ──────────────────────────────────────────── */
+    function isViewingTodayMonth(){ return viewYear===MI_TODAY.getFullYear()&&viewMonth===MI_TODAY.getMonth(); }
+
+    function renderCal(){
+      var firstDow = new Date(viewYear, viewMonth, 1).getDay();
+      var daysInM  = new Date(viewYear, viewMonth+1, 0).getDate();
+      monthLabel.textContent = MONTHS[viewMonth]+', '+viewYear;
+      todayBtn.disabled = isViewingTodayMonth();
+      calGrid.className = 'mi-cal-grid tab-'+activeTab;
+      var html = '';
+      for(var i=0;i<firstDow;i++) html+='<div class="mi-cell mi-empty"></div>';
+      for(var day=1;day<=daysInM;day++){
+        var data    = getData(viewYear, viewMonth, day);
+        var effData = getEffectiveData(data, viewYear, viewMonth, day);
+        var isToday = (viewYear===MI_TODAY.getFullYear()&&viewMonth===MI_TODAY.getMonth()&&day===MI_TODAY.getDate());
+        var isSel   = selDate&&(viewYear===selDate.getFullYear()&&viewMonth===selDate.getMonth()&&day===selDate.getDate());
+        var bgCls   = cellBgClass(effData, activeTab);
+        var cls = 'mi-cell '+bgCls+(isSel?' mi-selected':'');
+        html += '<div class="'+cls+'" data-y="'+viewYear+'" data-m="'+viewMonth+'" data-d="'+day+'">';
+        html += '<div class="mi-cell-date">'+day;
+        if(isToday)              html+='<span class="mi-today-badge">TODAY</span>';
+        else if(data.lv==='soldout') html+='<span class="mi-sld-badge">SLD</span>';
+        html += '</div>';
+        html += cellContent(effData, activeTab, viewYear, viewMonth, day);
+        html += '</div>';
+      }
+      calGrid.innerHTML = html;
+      calGrid.querySelectorAll('.mi-cell:not(.mi-empty)').forEach(function(cell){
+        cell.addEventListener('click', function(){
+          selDate = new Date(parseInt(this.dataset.y), parseInt(this.dataset.m), parseInt(this.dataset.d));
+          renderCal(); renderDetail();
+        });
+      });
+      calGrid.querySelectorAll('.mi-cell-ref-btn').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          rsStartRefresh(this.dataset.rskey);
+        });
+        rsAttachTip(btn);
+      });
+    }
+
+    /* ── Detail panel renderer ──────────────────────────────────────── */
+    function renderDetail(){
+      if(!selDate){
+        detailEl.innerHTML='<div class="mi-detail-empty"><span class="material-icons-round mi">touch_app</span>Select a date to view details</div>';
+        return;
+      }
+      var y=selDate.getFullYear(), m=selDate.getMonth(), day=selDate.getDate();
+      var data = getData(y,m,day);
+      var effData = getEffectiveData(data, y, m, day);
+      var compLabel = selectedComp===null ? 'Compset median' : COMPS[selectedComp].n;
+      var dateStr = DOWS[selDate.getDay()]+', '+MONTHS[m]+' '+day+' '+y;
+
+      var dcId = scopeId+'-dc';
+      var posRefId = scopeId+'-pos-ref-btn';
+      var header = '<div class="mi-detail-header"><div class="mi-detail-title">'+dateStr+'</div><button class="mi-detail-close" id="'+dcId+'"><span class="material-icons-round mi">close</span></button></div>';
+
+      var body = '';
+      if(data.lv==='soldout'){
+        body = '<div class="mi-detail-body" style="color:var(--text-sec);font-size:13px;flex-direction:row;align-items:center;gap:8px;"><span class="material-icons-round mi" style="font-size:20px">hotel</span>Sold out \u2014 no availability</div>';
+      } else {
+        var pctColor = effData.pc>0?'#D33030':(effData.pc<0?'#2E65E8':'var(--text-sec)');
+        var totalW   = DEMAND_W[data.td||data.lv]||55;
+        var leisureW = DEMAND_W[data.ld||'normal']||55;
+        var bizW     = DEMAND_W[data.bd||'normal']||55;
+        function dlbl(k){ var v=cap(k||'normal'); return v==='Vlow'?'Very low':v==='Vhigh'?'Very high':v; }
+
+        function demandItem(label, w, lbl){
+          return '<div class="mi-demand-item">'
+            +'<div class="mi-demand-item-header"><span class="mi-demand-row-label">'+label+'</span><span class="mi-demand-row-val">'+lbl+'</span></div>'
+            +'<div class="mi-demand-bar-track"><div class="mi-demand-bar-fill" style="width:'+w+'%"></div></div>'
+            +'</div>';
+        }
+
+        body += '<div class="mi-detail-body">';
+
+        // ── Positioning ────────────────────────────────────────────────
+        var posCls = effData.pc>=8?'pos-highest':effData.pc>=2?'pos-high':effData.pc>-2?'pos-normal':effData.pc>-8?'pos-low':'pos-lowest';
+        var aboveStr = effData.pc>0?'<strong style="color:'+pctColor+'">'+effData.pc+'% above</strong> '+compLabel+' of $'+effData.cp
+                     :(effData.pc<0?'<strong style="color:'+pctColor+'">'+Math.abs(effData.pc)+'% below</strong> '+compLabel+' of $'+effData.cp
+                     :'At '+compLabel+' of $'+effData.cp);
+        var _rsk = rsKey(y,m,day); var _rs = rsGet(_rsk);
+        var _rbc = 'mi-pos-ref-btn'+(_rs.status==='done'?' rs-done':'');
+        body += '<div class="mi-detail-section">';
+        body += '<div class="mi-pos-section-hdr"><div class="mi-detail-section-label">POSITIONING:</div><button class="'+_rbc+'" id="'+posRefId+'" data-rskey="'+_rsk+'">'+rsBtnInner(_rs)+'</button></div>';
+        body += '<div class="mi-pos-card '+posCls+'">';
+        body += '<div class="mi-pos-price">$'+data.pr+'</div>';
+        body += '<div class="mi-pos-desc">'+aboveStr+'</div>';
+        body += '</div></div>';
+
+        body += '<div class="mi-detail-divider"></div>';
+
+        // ── Demand ──────────────────────────────────────────────────────
+        body += '<div class="mi-detail-section">';
+        body += '<div class="mi-detail-section-label">DEMAND:</div>';
+        body += demandItem('Total demand:',   totalW,   dlbl(data.td));
+        body += demandItem('Leisure demand:', leisureW, dlbl(data.ld));
+        body += demandItem('Business demand:',bizW,     dlbl(data.bd));
+        body += '</div>';
+
+        body += '<div class="mi-detail-divider"></div>';
+
+        // ── Top Search Origins ──────────────────────────────────────────
+        if(data.og&&data.og.length){
+          body += '<div class="mi-detail-section">';
+          body += '<div class="mi-detail-section-label">TOP SEARCH ORIGINS:</div>';
+          data.og.forEach(function(o){
+            body += '<div class="mi-origin-row">'
+              +'<div class="mi-origin-flag">'+o.f+'</div>'
+              +'<div class="mi-origin-code">'+o.c+'</div>'
+              +'<div class="mi-origin-bar-track"><div class="mi-origin-bar-fill" style="width:'+o.p+'%"></div></div>'
+              +'<div class="mi-origin-pct">'+o.p+'%</div>'
+              +'</div>';
+          });
+          if(data.los) body += '<div class="mi-los-note">Most searched LOS: <strong>'+data.los+'</strong></div>';
+          body += '</div>';
+          body += '<div class="mi-detail-divider"></div>';
+        }
+
+        // ── Compset Breakdown ───────────────────────────────────────────
+        if(effData.mn){
+          var range = effData.mx - effData.mn;
+          var youPct = Math.max(1, Math.min(99, (effData.yu-effData.mn)/range*100));
+          var medPct = Math.max(1, Math.min(99, (effData.md-effData.mn)/range*100));
+          body += '<div class="mi-detail-section">';
+          body += '<div class="mi-detail-section-label">COMPSET BREAKDOWN:</div>';
+          body += '<div class="mi-compset-range"><span>Min: $'+effData.mn+'</span><span>Med: $'+effData.md+'</span><span>Max: $'+effData.mx+'</span></div>';
+          body += '<div class="mi-compset-track">'
+            +'<div class="mi-compset-tick" style="left:0"></div>'
+            +'<div class="mi-compset-tick" style="left:'+medPct+'%"></div>'
+            +'<div class="mi-compset-tick" style="left:99%"></div>'
+            +'<div class="mi-compset-marker" style="left:'+youPct+'%"></div>'
+            +'</div>';
+          body += '<div class="mi-you-row" style="padding-left:calc('+youPct+'% - 16px)">You: <strong>&nbsp;$'+effData.yu+'</strong></div>';
+
+          COMPS.forEach(function(c,i){
+            var soldout = (seed(y,m,day,i+20)%8===0);
+            body += '<div class="mi-competitor-card">';
+            body += '<span class="mi-competitor-name">'+c.n+'</span>';
+            if(soldout){
+              body += '<span class="mi-competitor-soldout">Sold out</span>';
+            } else {
+              var baseOff = c.offsets[Math.abs(seed(y,m,day,i))%c.offsets.length];
+              var cp = effData.md + baseOff;
+              var diff = cp - effData.yu;
+              var diffCls = diff<0?'neg':'pos';
+              var diffStr = (diff>=0?'+':'')+diff;
+              body += '<div class="mi-competitor-right">'
+                +'<span class="mi-competitor-price-val">$'+cp+'</span>'
+                +'<span class="mi-competitor-diff '+diffCls+'">'+diffStr+'</span>'
+                +'</div>';
+            }
+            body += '</div>';
+          });
+          body += '</div>';
+          body += '<div class="mi-detail-divider"></div>';
+        }
+
+        // ── Rate Parity ─────────────────────────────────────────────────
+        var rw = srnd(y,m,day,30,85,145);
+        var rl = srnd(y,m,day,31,30,75);
+        var rn = srnd(y,m,day,32,10,25);
+        var rm = 367-rw-rl-rn;
+        var tot = rw+rm+rl+rn;
+        var wP=(rw/tot*100).toFixed(1), lP=(rl/tot*100).toFixed(1), nP=(rn/tot*100).toFixed(1);
+        var lLeft=(rw/tot*100+rm/tot*100).toFixed(1);
+        var nLeft=(rw/tot*100+rm/tot*100+rl/tot*100).toFixed(1);
+        body += '<div class="mi-detail-section">';
+        body += '<div class="mi-detail-section-label">RATE PARITY:</div>';
+        body += '<div class="mi-parity-bar">'
+          +'<div class="mi-parity-win"  style="width:'+wP+'%"></div>'
+          +'<div class="mi-parity-loss" style="left:'+lLeft+'%;width:'+lP+'%"></div>'
+          +'<div class="mi-parity-na"   style="width:'+nP+'%"></div>'
+          +'</div>';
+        body += '<div class="mi-parity-stats">'
+          +'<span class="mi-parity-win-lbl">'+rw+' win</span>'
+          +'<span class="mi-parity-meet-lbl">'+rm+' meet</span>'
+          +'<span class="mi-parity-loss-lbl">'+rl+' loss</span>'
+          +'<span class="mi-parity-na-lbl">'+rn+' N/A</span>'
+          +'</div>';
+        body += '</div>';
+
+        body += '<div class="mi-detail-divider"></div>';
+
+        // ── Review Scores ───────────────────────────────────────────────
+        var yourScore = (7.8+(srnd(y,m,day,40,0,6))/10).toFixed(1);
+        var yourTrend = srnd(y,m,day,41,0,1)===0?'down':'up';
+        body += '<div class="mi-detail-section">';
+        body += '<div class="mi-review-header-block">'
+          +'<div class="mi-detail-section-label">REVIEW SCORES:</div>'
+          +'<div class="mi-review-sub">Last 12 months average</div>'
+          +'</div>';
+
+        function reviewItem(name, score, trend, isYou){
+          var barW = (parseFloat(score)/10*100).toFixed(1);
+          var barCls = isYou?'you-bar':'comp-bar';
+          var nameCls = 'mi-review-name'+(isYou?' you':'');
+          var arrow = trend==='up'?'\u2191':'\u2193';
+          return '<div class="mi-review-item">'
+            +'<div class="mi-review-item-header">'
+            +'<span class="'+nameCls+'">'+name+'</span>'
+            +'<span class="mi-review-score">'+score+'</span>'
+            +'<span class="mi-review-arrow '+trend+'">'+arrow+'</span>'
+            +'</div>'
+            +'<div class="mi-review-bar-track"><div class="mi-review-bar-fill '+barCls+'" style="width:'+barW+'%"></div></div>'
+            +'</div>';
+        }
+
+        body += reviewItem('Your hotel:', yourScore, yourTrend, true);
+        COMP_REVIEWS.forEach(function(r,i){
+          var nudge=(srnd(y,m,day,42+i,0,4)-2)/10;
+          var score=Math.max(6.0,Math.min(9.9,r.base+nudge)).toFixed(1);
+          body += reviewItem(r.n, score, r.trend, false);
+        });
+        body += '</div>';
+
+        body += '</div>'; // mi-detail-body
+      }
+
+      detailEl.innerHTML = header + '<div class="mi-detail-scroll">' + body + '</div>';
+
+      var dcBtn = document.getElementById(dcId);
+      if(dcBtn) dcBtn.addEventListener('click', function(){
+        selDate=null; renderCal(); renderDetail();
+      });
+
+      var posRefBtn = document.getElementById(posRefId);
+      if(posRefBtn){
+        posRefBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          rsStartRefresh(this.dataset.rskey);
+        });
+        rsAttachTip(posRefBtn);
+      }
+    }
+
+    /* ── Extra filters row ──────────────────────────────────────────── */
+    var miLOS = 2, miOccupancy = 2, miChannel = 'All channels';
+    var moreFiltersOpen = false;
+    var mfBtn   = sc.querySelector('[data-mi="more-filters-btn"]');
+    var mfLabel = sc.querySelector('[data-mi="mf-label"]');
+    var mfIcon  = sc.querySelector('[data-mi="mf-icon"]');
+    var xfRow   = sc.querySelector('[data-mi="extra-filters"]');
+
+    var LOS_OPTS = [
+      {val:1, label:'1 night'},
+      {val:2, label:'2 nights'},
+      {val:3, label:'3 nights'},
+      {val:5, label:'5 nights'},
+      {val:7, label:'7 nights'}
+    ];
+    var OCC_OPTS = [
+      {val:1, label:'1 guest'},
+      {val:2, label:'2 guests'},
+      {val:3, label:'3 guests'},
+      {val:4, label:'4 guests'}
+    ];
+    var CH_OPTS = ['All channels','Booking.com','Expedia','Direct / Brand.com','Google Hotel Ads','Airbnb','Agoda','Hotels.com','Hotelbeds','Travelport GDS'];
+
+    function losLabel(v){ var o=LOS_OPTS.filter(function(x){return x.val===v;})[0]; return o?o.label:v+' nights'; }
+    function occLabel(v){ var o=OCC_OPTS.filter(function(x){return x.val===v;})[0]; return o?o.label:v+' guests'; }
+
+    function syncXfLabels(){
+      var losLbl = sc.querySelector('[data-mi="los-label"]');
+      var occLbl = sc.querySelector('[data-mi="occ-label"]');
+      var chLbl  = sc.querySelector('[data-mi="ch-label"]');
+      if(losLbl) losLbl.textContent = losLabel(miLOS);
+      if(occLbl) occLbl.textContent = occLabel(miOccupancy);
+      if(chLbl)  chLbl.textContent  = miChannel;
+    }
+
+    if(mfBtn){
+      mfBtn.addEventListener('click', function(){
+        moreFiltersOpen = !moreFiltersOpen;
+        if(mfLabel) mfLabel.textContent  = moreFiltersOpen ? 'Less Filters' : 'More Filters';
+        if(mfIcon)  mfIcon.textContent   = moreFiltersOpen ? 'expand_less'  : 'expand_more';
+        mfBtn.classList.toggle('mi-filters-open', moreFiltersOpen);
+        if(xfRow) xfRow.classList.toggle('mi-xf-visible', moreFiltersOpen);
+      });
+    }
+
+    // LOS dropdown
+    var losDdOpen = false;
+    var losBtn = sc.querySelector('[data-mi="los-btn"]');
+    function closeLosDd(){ var d2=sc.querySelector('.mi-los-dd-inst'); if(d2)d2.remove(); losDdOpen=false; }
+    function openLosDd(){
+      var dd=document.createElement('div'); dd.className='mi-comp-dd mi-los-dd-inst';
+      dd.innerHTML = LOS_OPTS.map(function(o){
+        return '<div class="mi-comp-dd-opt'+(o.val===miLOS?' mi-comp-active':'')+'" data-los="'+o.val+'">'+o.label+'</div>';
+      }).join('');
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click',function(e){
+          e.stopPropagation(); miLOS=parseInt(this.dataset.los); syncXfLabels(); closeLosDd();
+        });
+      });
+      if(losBtn) losBtn.parentNode.appendChild(dd);
+      losDdOpen=true;
+      setTimeout(function(){ document.addEventListener('click',function(){ closeLosDd(); },{once:true}); },0);
+    }
+    if(losBtn) losBtn.addEventListener('click',function(e){ e.stopPropagation(); if(losDdOpen){closeLosDd();}else{closeOccDd();closeChDd();openLosDd();} });
+
+    // Occupancy dropdown
+    var occDdOpen = false;
+    var occBtn = sc.querySelector('[data-mi="occ-btn"]');
+    function closeOccDd(){ var d2=sc.querySelector('.mi-occ-dd-inst'); if(d2)d2.remove(); occDdOpen=false; }
+    function openOccDd(){
+      var dd=document.createElement('div'); dd.className='mi-comp-dd mi-occ-dd-inst';
+      dd.innerHTML = OCC_OPTS.map(function(o){
+        return '<div class="mi-comp-dd-opt'+(o.val===miOccupancy?' mi-comp-active':'')+'" data-occ="'+o.val+'">'+o.label+'</div>';
+      }).join('');
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click',function(e){
+          e.stopPropagation(); miOccupancy=parseInt(this.dataset.occ); syncXfLabels(); closeOccDd();
+        });
+      });
+      if(occBtn) occBtn.parentNode.appendChild(dd);
+      occDdOpen=true;
+      setTimeout(function(){ document.addEventListener('click',function(){ closeOccDd(); },{once:true}); },0);
+    }
+    if(occBtn) occBtn.addEventListener('click',function(e){ e.stopPropagation(); if(occDdOpen){closeOccDd();}else{closeLosDd();closeChDd();openOccDd();} });
+
+    // Channel dropdown
+    var chDdOpen = false;
+    var chBtn = sc.querySelector('[data-mi="ch-btn"]');
+    function closeChDd(){ var d2=sc.querySelector('.mi-ch-dd-inst'); if(d2)d2.remove(); chDdOpen=false; }
+    function openChDd(){
+      var dd=document.createElement('div'); dd.className='mi-comp-dd mi-ch-dd-inst';
+      dd.innerHTML = CH_OPTS.map(function(ch){
+        return '<div class="mi-comp-dd-opt'+(ch===miChannel?' mi-comp-active':'')+'" data-ch="'+ch+'">'+ch+'</div>';
+      }).join('');
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click',function(e){
+          e.stopPropagation(); miChannel=this.dataset.ch; syncXfLabels(); closeChDd();
+        });
+      });
+      if(chBtn) chBtn.parentNode.appendChild(dd);
+      chDdOpen=true;
+      setTimeout(function(){ document.addEventListener('click',function(){ closeChDd(); },{once:true}); },0);
+    }
+    if(chBtn) chBtn.addEventListener('click',function(e){ e.stopPropagation(); if(chDdOpen){closeChDd();}else{closeLosDd();closeOccDd();openChDd();} });
+
+    /* ── Segment dropdown ───────────────────────────────────────────── */
+    var segDdOpen = false;
+    var segBtn    = sc.querySelector('[data-mi="seg-btn"]');
+    var segLabel  = sc.querySelector('[data-mi="seg-label"]');
+
+    function closeSegDd(){ var d2=sc.querySelector('.mi-seg-dd-inst'); if(d2)d2.remove(); segDdOpen=false; }
+
+    function openSegDd(){
+      var dd = document.createElement('div');
+      dd.className='mi-comp-dd mi-seg-dd-inst';
+      dd.innerHTML = SEGMENT_OPTS.map(function(o){
+        return '<div class="mi-comp-dd-opt'+(o.key===activeSegment?' mi-comp-active':'')+'" data-seg="'+o.key+'">'+o.label+'</div>';
+      }).join('');
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click', function(e){
+          e.stopPropagation();
+          activeSegment = this.dataset.seg;
+          if(segLabel) segLabel.textContent = SEGMENT_OPTS.filter(function(o){return o.key===activeSegment;})[0].label;
+          closeSegDd();
+          renderCal(); if(selDate) renderDetail();
+        });
+      });
+      if(segBtn) segBtn.parentNode.appendChild(dd);
+      segDdOpen=true;
+      setTimeout(function(){ document.addEventListener('click', function(){ closeSegDd(); }, {once:true}); }, 0);
+    }
+
+    if(segBtn) segBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(segDdOpen){ closeSegDd(); } else { closeRoomDd(); closeCompDd(); closeLosDd(); closeOccDd(); closeChDd(); openSegDd(); }
+    });
+
+    /* ── Room type dropdown ─────────────────────────────────────────── */
+    var roomDdOpen = false;
+    var roomBtn    = sc.querySelector('[data-mi="room-btn"]');
+    var roomLabel  = sc.querySelector('[data-mi="room-label"]');
+
+    function closeRoomDd(){ var d2=sc.querySelector('.mi-room-dd-inst'); if(d2)d2.remove(); roomDdOpen=false; }
+
+    function openRoomDd(){
+      var dd = document.createElement('div');
+      dd.className='mi-comp-dd mi-room-dd-inst';
+      dd.innerHTML = OB_ROOMS.map(function(r,i){
+        return '<div class="mi-comp-dd-opt'+(i===activeRoomType?' mi-comp-active':'')+'" data-roomidx="'+i+'">'+r.label+'</div>';
+      }).join('');
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click', function(e){
+          e.stopPropagation();
+          activeRoomType = parseInt(this.dataset.roomidx);
+          if(roomLabel) roomLabel.textContent = OB_ROOMS[activeRoomType].label;
+          closeRoomDd();
+          renderCal(); if(selDate) renderDetail();
+        });
+      });
+      if(roomBtn) roomBtn.parentNode.appendChild(dd);
+      roomDdOpen=true;
+      setTimeout(function(){ document.addEventListener('click', function(){ closeRoomDd(); }, {once:true}); }, 0);
+    }
+
+    if(roomBtn) roomBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(roomDdOpen){ closeRoomDd(); } else { closeSegDd(); closeCompDd(); closeLosDd(); closeOccDd(); closeChDd(); openRoomDd(); }
+    });
+
+    /* ── Comp selector dropdown ─────────────────────────────────────── */
+    var compDdOpen = false;
+    var compBtn   = sc.querySelector('[data-mi="comp-btn"]');
+    var compLabel = sc.querySelector('[data-mi="comp-label"]');
+
+    function closeCompDd(){
+      var d2 = sc.querySelector('.mi-comp-dd-inst');
+      if(d2) d2.remove();
+      compDdOpen = false;
+    }
+
+    function openCompDd(){
+      var wrap = compBtn ? compBtn.parentNode : sc;
+      var dd = document.createElement('div');
+      dd.className = 'mi-comp-dd mi-comp-dd-inst';
+
+      var opts = [{label:'Compset Median', idx:null}];
+      COMPS.forEach(function(c,i){ opts.push({label:c.n, idx:i}); });
+
+      var html = '';
+      opts.forEach(function(o, pos){
+        if(pos===1) html += '<div class="mi-comp-dd-sep"></div>';
+        var active = (o.idx===selectedComp) ? ' mi-comp-active' : '';
+        html += '<div class="mi-comp-dd-opt'+active+'" data-idx="'+(o.idx===null?'null':o.idx)+'">'+o.label+'</div>';
+      });
+      dd.innerHTML = html;
+
+      dd.querySelectorAll('.mi-comp-dd-opt').forEach(function(opt){
+        opt.addEventListener('click', function(e){
+          e.stopPropagation();
+          var raw = this.dataset.idx;
+          selectedComp = raw==='null' ? null : parseInt(raw);
+          if(compLabel) compLabel.textContent = selectedComp===null ? 'Compset Median' : COMPS[selectedComp].n;
+          closeCompDd();
+          renderCal();
+          if(selDate) renderDetail();
+        });
+      });
+
+      wrap.appendChild(dd);
+      compDdOpen = true;
+      setTimeout(function(){ document.addEventListener('click', function(){ closeCompDd(); }, {once:true}); }, 0);
+    }
+
+    if(compBtn) compBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(compDdOpen){ closeCompDd(); } else { closeSegDd(); closeRoomDd(); closeLosDd(); closeOccDd(); closeChDd(); openCompDd(); }
+    });
+
+    /* ── Month picker ───────────────────────────────────────────────── */
+    var mpYear = viewYear;
+    var mpOpen = false;
+    var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    function closePicker(){ var p=sc.querySelector('.mi-month-picker-inst'); if(p) p.remove(); mpOpen=false; }
+
+    function renderPickerContent(p){
+      p.innerHTML = '<div class="mi-mp-header">'
+        +'<button class="mi-mp-ynav mi-mp-prev-inst"><span class="material-icons-round mi">chevron_left</span></button>'
+        +'<span class="mi-mp-year">'+mpYear+'</span>'
+        +'<button class="mi-mp-ynav mi-mp-next-inst"><span class="material-icons-round mi">chevron_right</span></button>'
+        +'</div>'
+        +'<div class="mi-mp-grid">'
+        +MONTHS_SHORT.map(function(mo,i){
+          var active=(i===viewMonth&&mpYear===viewYear)?' mi-mp-active':'';
+          return '<button class="mi-mp-month'+active+'" data-mi="'+i+'">'+mo+'</button>';
+        }).join('')
+        +'</div>';
+      p.querySelector('.mi-mp-prev-inst').addEventListener('click', function(e){ e.stopPropagation(); mpYear--; renderPickerContent(p); });
+      p.querySelector('.mi-mp-next-inst').addEventListener('click', function(e){ e.stopPropagation(); mpYear++; renderPickerContent(p); });
+      p.querySelectorAll('.mi-mp-month').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();
+          viewYear=mpYear; viewMonth=parseInt(this.dataset.mi);
+          closePicker(); renderCal();
+        });
+      });
+    }
+
+    function openPicker(){
+      mpYear = viewYear;
+      var p = document.createElement('div');
+      p.className='mi-month-picker mi-month-picker-inst';
+      renderPickerContent(p);
+      monthLabel.appendChild(p);
+      mpOpen=true;
+      setTimeout(function(){ document.addEventListener('click', function(){ closePicker(); }, {once:true}); },0);
+    }
+
+    if(monthLabel) monthLabel.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(mpOpen){ closePicker(); } else { openPicker(); }
+    });
+
+    /* ── Month nav buttons ──────────────────────────────────────────── */
+    if(prevBtn) prevBtn.addEventListener('click', function(){ if(--viewMonth<0){viewMonth=11;viewYear--;} renderCal(); });
+    if(nextBtn) nextBtn.addEventListener('click', function(){ if(++viewMonth>11){viewMonth=0;viewYear++;} renderCal(); });
+    if(todayBtn) todayBtn.addEventListener('click', function(){
+      viewYear=MI_TODAY.getFullYear(); viewMonth=MI_TODAY.getMonth();
+      renderCal();
+    });
+
+    /* ── Tabs ───────────────────────────────────────────────────────── */
+    tabs.forEach(function(t){
+      t.addEventListener('click', function(){
+        tabs.forEach(function(x){x.classList.remove('mi-active');}); this.classList.add('mi-active');
+        activeTab=this.dataset.tab; renderCal();
+      });
+    });
+
+    /* ── Initial render ─────────────────────────────────────────────── */
+    viewYear=MI_TODAY.getFullYear(); viewMonth=MI_TODAY.getMonth(); selDate=MI_TODAY;
+    syncXfLabels();
+    renderCal();
+    renderDetail();
+
+    /* ── Public API (used by settings modal) ────────────────────────── */
+    return {
+      scopeId: scopeId,
+      COMPS: COMPS,
+      COMP_REVIEWS: COMP_REVIEWS,
+      renderCal: renderCal,
+      renderDetail: renderDetail
+    };
+  }
+
+  /* ── Create 3 instances ─────────────────────────────────────────────── */
+  instances.si  = createMI('mi-scope-si',  PROP_CFGS.si);
+  instances.c2  = createMI('mi-scope-c2',  PROP_CFGS.c2);
+  instances.c11 = createMI('mi-scope-c11', PROP_CFGS.c11);
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SETTINGS MODAL (shared, one HTML instance)
+  ══════════════════════════════════════════════════════════════════════ */
+  var stOverlay  = document.getElementById('st-overlay');
+  var stSnapshot = null;
+  var activeInst = null;
+
+  var OB_CATS = ['Standard','Deluxe','Suite','Executive','Premium'];
+
+  var stSaveBtn = document.getElementById('st-save-btn');
+
+  function stShowTab(name){
+    document.querySelectorAll('.st-tab').forEach(function(t){
+      t.classList.toggle('st-active', t.dataset.sttab === name);
+    });
+    document.querySelectorAll('.st-panel').forEach(function(p){ p.classList.add('st-hidden'); });
+    var panel = document.getElementById('st-p-'+name);
+    if(panel) panel.classList.remove('st-hidden');
+  }
+
+  var stSearchQ = '';
+
+  function stRenderHotels(){
+    var list = document.getElementById('st-hotel-list');
+    if(!list || !activeInst) return;
+    var comps = activeInst.COMPS;
+    list.innerHTML = comps.map(function(c, i){
+      var chk = '<span class="material-icons-round mi" style="color:white;font-size:14px;">check</span>';
+      return '<div class="ob-hotel-row ob-checked" data-stidx="'+i+'">'
+        +'<div class="ob-chk">'+chk+'</div>'
+        +'<span class="ob-hotel-name">'+c.n+'</span>'
+        +'</div>';
+    }).join('');
+    if(stSaveBtn) stUpdateSaveBtn();
+  }
+
+  function stRenderRooms(){
+    var rows = document.getElementById('st-room-rows');
+    if(!rows) return;
+    rows.innerHTML = OB_ROOMS.map(function(r,i){
+      return '<div class="ob-room-row">'
+        +'<div class="ob-room-input">'+r.label+'</div>'
+        +'<span class="material-icons-round mi" style="color:#4F5B60;font-size:18px;">arrow_forward</span>'
+        +'<select class="ob-room-select" data-stroom="'+i+'">'
+        +OB_CATS.map(function(c){ return '<option>'+c+'</option>'; }).join('')
+        +'</select>'
+        +'</div>';
+    }).join('');
+    rows.querySelectorAll('[data-stroom]').forEach(function(sel){
+      sel.addEventListener('change', function(){ stUpdateSaveBtn(); });
+    });
+  }
+
+  function stTakeSnapshot(){
+    if(!activeInst) return;
+    stSnapshot = {
+      comps: activeInst.COMPS.map(function(c){ return {n:c.n, offsets:c.offsets.slice()}; }),
+      compReviews: activeInst.COMP_REVIEWS.map(function(r){ return {n:r.n, base:r.base, trend:r.trend}; })
+    };
+  }
+
+  function stRestoreSnapshot(){
+    if(!stSnapshot || !activeInst) return;
+    activeInst.COMPS.forEach(function(c,i){
+      if(stSnapshot.comps[i]){ c.n=stSnapshot.comps[i].n; c.offsets=stSnapshot.comps[i].offsets.slice(); }
+    });
+    activeInst.COMP_REVIEWS.forEach(function(r,i){
+      if(stSnapshot.compReviews[i]){ r.n=stSnapshot.compReviews[i].n; r.base=stSnapshot.compReviews[i].base; r.trend=stSnapshot.compReviews[i].trend; }
+    });
+  }
+
+  function stCheckDirty(){
+    if(!stSnapshot || !activeInst) return false;
+    for(var i=0; i<activeInst.COMPS.length; i++){
+      if(!stSnapshot.comps[i]) return true;
+      if(activeInst.COMPS[i].n !== stSnapshot.comps[i].n) return true;
+    }
+    return false;
+  }
+
+  function stUpdateSaveBtn(){
+    if(stSaveBtn) stSaveBtn.disabled = !stCheckDirty();
+  }
+
+  function stOpen(){
+    if(!activeInst) return;
+    stTakeSnapshot();
+    stSearchQ = '';
+    var stSearch = document.getElementById('st-search');
+    if(stSearch) stSearch.value = '';
+    stShowTab('compset');
+    stRenderHotels();
+    stRenderRooms();
+    if(stSaveBtn) stSaveBtn.disabled = true;
+    if(stOverlay) stOverlay.classList.add('st-visible');
+  }
+
+  function stClose(){
+    if(stOverlay) stOverlay.classList.remove('st-visible');
+  }
+
+  function stSave(){
+    if(activeInst){
+      var list = document.getElementById('st-hotel-list');
+      if(list){
+        list.querySelectorAll('.ob-hotel-row').forEach(function(row){
+          var idx = parseInt(row.dataset.stidx);
+          var nameEl = row.querySelector('.ob-hotel-name');
+          if(nameEl && activeInst.COMPS[idx]){
+            activeInst.COMPS[idx].n = nameEl.textContent;
+            if(activeInst.COMP_REVIEWS[idx]) activeInst.COMP_REVIEWS[idx].n = nameEl.textContent;
+          }
+        });
+      }
+      activeInst.renderCal();
+      activeInst.renderDetail();
+    }
+    stClose();
+  }
+
+  // Bind settings open buttons for each scope
+  ['si','c2','c11'].forEach(function(key){
+    var scopeEl = document.getElementById('mi-scope-'+key);
+    if(!scopeEl) return;
+    var card = scopeEl.closest('.home-card-mi');
+    if(!card) return;
+    var btn = card.querySelector('.mi-settings-card-btn[data-mi-scope="'+key+'"]');
+    if(btn) btn.addEventListener('click', function(){
+      activeInst = instances[key];
+      stOpen();
+    });
+  });
+
+  // Settings modal event listeners
+  if(stOverlay){
+    var stCancelBtn = document.getElementById('st-cancel-btn');
+    if(stCancelBtn) stCancelBtn.addEventListener('click', function(){
+      stRestoreSnapshot();
+      stClose();
+    });
+
+    if(stSaveBtn) stSaveBtn.addEventListener('click', function(){ stSave(); });
+    var stCloseBtn = document.getElementById('st-close-btn');
+    if(stCloseBtn) stCloseBtn.addEventListener('click', function(){ stClose(); });
+
+    document.querySelectorAll('.st-tab').forEach(function(t){
+      t.addEventListener('click', function(){ stShowTab(this.dataset.sttab); });
+    });
+
+    var stSearch = document.getElementById('st-search');
+    if(stSearch) stSearch.addEventListener('input', function(){
+      stSearchQ = this.value;
+      stRenderHotels();
+    });
+  }
+
+}());
+</script>
+
 </body>
 </html>
