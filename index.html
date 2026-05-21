@@ -4462,6 +4462,10 @@
       badge.classList.remove('sp-badge--dot');
       badge.style.display = 'none';
     }
+    // Notify the Alerts Summary widget so it re-renders its counts
+    if (typeof window._ap.onAlertsChanged === 'function') {
+      window._ap.onAlertsChanged();
+    }
   }
 
   /* ── table pill sync ─────────────────────────── */
@@ -9772,6 +9776,9 @@
     }
     render();
   };
+
+  // Re-render whenever the main panel mutates alert read/dismiss state
+  window._ap.onAlertsChanged = function () { render(); };
 
   buildRegionMap();
   render();
