@@ -4463,7 +4463,7 @@
       badge.style.display = 'none';
     }
     // Notify the Alerts Summary widget so it re-renders its counts
-    if (typeof window._ap.onAlertsChanged === 'function') {
+    if (window._ap && typeof window._ap.onAlertsChanged === 'function') {
       window._ap.onAlertsChanged();
     }
   }
