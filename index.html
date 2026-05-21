@@ -1118,6 +1118,7 @@
       gap: 2px;
       padding: 4px 12px;
       flex-shrink: 0;
+      position: relative;
     }
     .ap-actions-spacer { flex: 1; }
     .ap-mark-all-read-btn {
@@ -1181,7 +1182,7 @@
     /* ── Sort dropdown ── */
     .ap-sort-menu {
       position: absolute;
-      top: calc(100% - 1px); right: 48px;
+      top: 100%; left: 12px;
       width: 224px;
       background: white;
       border: 1px solid var(--grey-300);
@@ -1212,7 +1213,7 @@
     /* ── Filter dropdown ── */
     .ap-filter-menu {
       position: absolute;
-      top: calc(100% - 1px); right: 14px;
+      top: 100%; left: 46px;
       width: 260px;
       background: white;
       border: 1px solid var(--grey-300);
@@ -1309,7 +1310,7 @@
     /* ── Hotel filter panel ── */
     .ap-hotel-filter-menu {
       position: absolute;
-      top: calc(100% - 1px); right: 14px;
+      top: 100%; left: 80px;
       width: 280px;
       background: white;
       border: 1px solid var(--grey-300);
@@ -3918,6 +3919,30 @@
           </button>
         </div>
 
+      </div>
+
+      <!-- Actions row (sort / filter / search) -->
+      <div class="ap-actions" id="ap-actions">
+        <button class="ap-header-btn" id="ap-sort-btn" data-tooltip="Sort" aria-label="Sort">
+          <span class="material-icons-round mi">sort</span>
+        </button>
+        <button class="ap-header-btn" id="ap-filter-btn" data-tooltip="Filter" aria-label="Filter">
+          <span class="material-icons-round mi">filter_alt</span>
+        </button>
+        <button class="ap-header-btn" id="ap-hotel-filter-btn" data-tooltip="Filter by hotel" aria-label="Filter by hotel" style="display:none">
+          <span class="material-icons-round mi">business</span>
+        </button>
+        <button class="ap-header-btn" id="ap-search-btn" data-tooltip="Search" aria-label="Search">
+          <span class="material-icons-round mi">search</span>
+        </button>
+        <div class="ap-actions-spacer"></div>
+        <button class="ap-reset-filters-btn" id="ap-reset-filters-btn" style="display:none" aria-label="Reset filters">
+          <span class="material-icons-round mi">filter_alt_off</span>Reset filters
+        </button>
+        <button class="ap-mark-all-read-btn" id="ap-mark-all-read-btn" aria-label="Mark all as read">
+          <span class="material-icons-round mi">done_all</span>Mark all as read
+        </button>
+
         <!-- Sort dropdown -->
         <div class="ap-sort-menu" id="ap-sort-menu">
           <div class="ap-sort-label">Sort by:</div>
@@ -4033,29 +4058,6 @@
           <div class="ap-filter-section-scroll ap-hf-list" id="ap-hf-list" style="flex:1; min-height:0; padding: 4px 0;"></div>
           <button class="ap-filter-apply" id="ap-hf-apply">Apply</button>
         </div>
-      </div>
-
-      <!-- Actions row (sort / filter / search) -->
-      <div class="ap-actions" id="ap-actions">
-        <button class="ap-header-btn" id="ap-sort-btn" data-tooltip="Sort" aria-label="Sort">
-          <span class="material-icons-round mi">sort</span>
-        </button>
-        <button class="ap-header-btn" id="ap-filter-btn" data-tooltip="Filter" aria-label="Filter">
-          <span class="material-icons-round mi">filter_alt</span>
-        </button>
-        <button class="ap-header-btn" id="ap-hotel-filter-btn" data-tooltip="Filter by hotel" aria-label="Filter by hotel" style="display:none">
-          <span class="material-icons-round mi">business</span>
-        </button>
-        <button class="ap-header-btn" id="ap-search-btn" data-tooltip="Search" aria-label="Search">
-          <span class="material-icons-round mi">search</span>
-        </button>
-        <div class="ap-actions-spacer"></div>
-        <button class="ap-reset-filters-btn" id="ap-reset-filters-btn" style="display:none" aria-label="Reset filters">
-          <span class="material-icons-round mi">filter_alt_off</span>Reset filters
-        </button>
-        <button class="ap-mark-all-read-btn" id="ap-mark-all-read-btn" aria-label="Mark all as read">
-          <span class="material-icons-round mi">done_all</span>Mark all as read
-        </button>
       </div>
 
       <!-- Search bar (shown when search is active) -->
